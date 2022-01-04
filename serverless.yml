@@ -1,0 +1,72 @@
+service: mysql-init-custom-resource
+
+provider:
+  name: aws
+  runtime: java11
+  memorySize: 1024
+  timeout: 60
+  region: us-west-2
+  deploymentBucket:
+    name: ${env:BUCKET}
+    serverSideEncryption: "AES256"
+  logRetentionInDays: 7
+  iam:
+    deploymentRole: "arn:aws:iam::${env:ACCOUNT}:role/cloudformation/deployer/cloudformation-deployer"
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - secretsmanager:GetResourcePolicy
+            - secretsmanager:GetSecretValue
+            - secretsmanager:DescribeSecret
+            - secretsmanager:ListSecretVersionIds
+            - secretsmanager:ListSecret
+          Resource:
+            - "*"
+  stackTags:
+    Creator: serverless
+    Environment: ${env:STAGE}
+    Project: ${self:service}
+    Team: platform
+    Visibility: internal
+  vpc:
+    subnetIds:
+      - ${env:SUBNET_ID}
+    securityGroupIds:
+      - !GetAtt LambdaSg.GroupId
+  lambdaHashingVersion: 20201221
+
+functions:
+  InitMySqlDatabase:
+    handler: com.dwolla.mysql.init.MySqlDatabaseInitHandler
+    package:
+      artifact: ${env:DATABASE_ARTIFACT_PATH}
+
+package:
+  individually: true
+
+resources:
+  Resources:
+    LambdaSg:
+      Type: AWS::EC2::SecurityGroup
+      Properties:
+        GroupDescription: Traffic source security group for ${env:STAGE} mysql-init-lambda
+        VpcId:
+          Fn::ImportValue: ${env:STAGE}VpcId
+        Tags:
+          - Key: SecurityGroupType
+            Value: TrafficSource
+  Description: "CloudFormation custom resources for initializing MySQL databases and users"
+  Outputs:
+    InitMySqlDatabaseFunction:
+      Description: Database initialization Lambda Function Service Token
+      Value:
+        'Fn::GetAtt': [InitMySqlDatabaseLambdaFunction, Arn]
+      Export:
+        Name: ${self:service}:${env:STAGE}:InitMySqlDatabaseArn
+    InitMySqlDatabaseSg:
+      Description: Secrutiy group attached to database initialization Lambda Function
+      Value:
+        !GetAtt LambdaSg.GroupId
+      Export:
+        Name: ${self:service}:${env:STAGE}:InitMySqlDatabaseSgId
