@@ -11,12 +11,11 @@ import feral.lambda.INothing
 import feral.lambda.cloudformation._
 import org.typelevel.log4cats.Logger
 
-class MySqlDatabaseInitHandlerImpl[F[_] : Concurrent : Logger](secretsManagerAlg: SecretsManagerAlg[F],
-                                                               databaseRepository: DatabaseRepository[ConnectionIO],
-                                                               roleRepository: RoleRepository[ConnectionIO],
-                                                               userRepository: UserRepository[ConnectionIO],
-                                                               xa: Transactor[F],
-                                                              ) extends CloudFormationCustomResource[F, DatabaseMetadata, INothing] {
+class MySqlDatabaseInitHandlerImpl[F[_] : Concurrent : Logger : TransactorFactory](secretsManagerAlg: SecretsManagerAlg[F],
+                                                                                   databaseRepository: DatabaseRepository[ConnectionIO],
+                                                                                   roleRepository: RoleRepository[ConnectionIO],
+                                                                                   userRepository: UserRepository[ConnectionIO],
+                                                                                  ) extends CloudFormationCustomResource[F, DatabaseMetadata, INothing] {
   override def createResource(event: DatabaseMetadata): F[HandlerResponse[INothing]] =
     handleCreateOrUpdate(event)(createOrUpdate(_, event)).map(HandlerResponse(_, None))
 
@@ -26,7 +25,7 @@ class MySqlDatabaseInitHandlerImpl[F[_] : Concurrent : Logger](secretsManagerAlg
   override def deleteResource(event: DatabaseMetadata): F[HandlerResponse[INothing]] =
     for {
       usernames <- getUsernamesFromSecrets(event.secretIds, UserRepository.usernameForDatabase(event.name))
-      dbId <- removeUsersFromDatabase(usernames, event.name).transact(xa)
+      dbId <- removeUsersFromDatabase(usernames, event.name).transact(TransactorFactory[F].buildTransactor(event))
 // TODO figure out how to implement this retry strategy (which was originally just on the user removal, but needs to operate in F[_], not ConnectionIO)
 //        .recoverWith {
 //          case SqlState.DependentObjectsStillExist(ex) if retries > 0 =>
@@ -54,10 +53,10 @@ class MySqlDatabaseInitHandlerImpl[F[_] : Concurrent : Logger](secretsManagerAlg
     } yield databaseAsPhysicalResourceId(db)
 
   private def handleCreateOrUpdate(input: DatabaseMetadata)
-                          (f: List[UserConnectionInfo] => ConnectionIO[PhysicalResourceId]): F[PhysicalResourceId] =
+                                  (f: List[UserConnectionInfo] => ConnectionIO[PhysicalResourceId]): F[PhysicalResourceId] =
     for {
       userPasswords <- input.secretIds.traverse(secretsManagerAlg.getSecretAs[UserConnectionInfo])
-      id <- f(userPasswords).transact(xa)
+      id <- f(userPasswords).transact(TransactorFactory[F].buildTransactor(input))
     } yield id
 
   private def getUsernamesFromSecrets(secretIds: List[SecretId], fallback: Username): F[List[Username]] =
@@ -81,12 +80,11 @@ class MySqlDatabaseInitHandlerImpl[F[_] : Concurrent : Logger](secretsManagerAlg
 }
 
 object MySqlDatabaseInitHandlerImpl {
-  def apply[F[_] : Temporal : Logger : Dispatcher](secretsManager: SecretsManagerAlg[F]): MySqlDatabaseInitHandlerImpl[F] =
+  def apply[F[_] : Concurrent : Logger : Dispatcher : TransactorFactory](secretsManager: SecretsManagerAlg[F]): MySqlDatabaseInitHandlerImpl[F] =
     new MySqlDatabaseInitHandlerImpl(
       secretsManager,
       DatabaseRepository[F],
       RoleRepository[F],
       UserRepository[F],
-      null, // TODO null
     )
 }

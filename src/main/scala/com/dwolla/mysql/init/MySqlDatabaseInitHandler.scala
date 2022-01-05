@@ -29,6 +29,8 @@ class MySqlDatabaseInitHandler
       entryPoint <- XRay.entryPoint[F]()
       secretsManager <- SecretsManagerAlg.resource[F].map(_.mapK(Kleisli.liftK[F, Span[F]]).withTracing)
     } yield { implicit env: LambdaEnv[F, CloudFormationCustomResourceRequest[DatabaseMetadata]] =>
+      implicit val transactorFactory: TransactorFactory[Kleisli[F, Span[F], *]] = TransactorFactory.tracedInstance[F]("MySqlDatabaseInitHandler")
+
       TracedHandler(entryPoint, Kleisli { (span: Span[F]) =>
         CloudFormationCustomResource(tracedHttpClient(client, span), MySqlDatabaseInitHandlerImpl(secretsManager)).run(span)
       })
