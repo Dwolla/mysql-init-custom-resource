@@ -98,8 +98,8 @@ object RoleRepository {
   }
 }
 
-// TODO MySQL queries
 object RoleQueries {
+  // Is this supposed to be GRANT role TO user?
   def grantRole(userName: Username,
                 role: RoleName): Update0 =
     sql"GRANT #${userName.value} TO #${role.value}"
@@ -110,20 +110,22 @@ object RoleQueries {
     sql"REVOKE #${userName.value} FROM #${role.value}"
       .update
 
+  // Pretty sure roles and users are stored in the same table
   def countRoleByName(roleName: RoleName): Query0[Long] =
-    sql"SELECT count(*) as count FROM pg_catalog.pg_roles WHERE rolname = ${roleName.value}"
+    sql"SELECT count(*) as count FROM mysql.user WHERE user = ${roleName.value}"
       .query[Long]
 
   def createRole(role: RoleName): Update0 =
     sql"CREATE ROLE #${role.value}"
       .update
 
+  // I think we need to run FLUSH PRIVILEGES to save these changes without restarting mysql
   def grantPrivilegesToRole(database: Database, role: RoleName): Update0 =
-    sql"GRANT ALL PRIVILEGES ON DATABASE #${database.value} TO #${role.value}"
+    sql"GRANT ALL PRIVILEGES ON #${database.value}.* TO #${role.value}"
       .update
 
   def revokePrivilegesFromRole(database: Database, role: RoleName): Update0 =
-    sql"REVOKE ALL PRIVILEGES ON DATABASE #${database.value} FROM #${role.value}"
+    sql"REVOKE ALL PRIVILEGES ON #${database.value}.* FROM #${role.value}"
       .update
 
   def dropRole(role: RoleName): Update0 =

@@ -46,18 +46,19 @@ object UserRepository {
 }
 
 object UserQueries {
+  // I think SELECT EXISTS(SELECT 1 FROM mysql.user WHERE user = ${username.value}") is more efficient but not sure it matters
   def checkUserExists(username: Username): Query0[Long] =
-    sql"SELECT count(*) as count FROM pg_catalog.pg_user u WHERE u.usename = ${username.value}"
+    sql"SELECT count(*) as count FROM mysql.user WHERE user = ${username.value}"
       .query[Long]
 
   def createUser(username: Username,
                  password: Password): Update0 =
-    sql"CREATE USER #${username.value} WITH PASSWORD '#${password.value}'"
+    sql"CREATE USER #${username.value} IDENTIFIED BY '#${password.value}'"
       .update
 
   def updateUser(username: Username,
                  password: Password): Update0 =
-    sql"ALTER USER #${username.value} WITH PASSWORD '#${password.value}'"
+    sql"ALTER USER #${username.value} IDENTIFIED BY '#${password.value}'"
       .update
 
   def removeUser(username: Username): Update0 =

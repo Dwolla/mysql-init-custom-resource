@@ -21,7 +21,7 @@ object DatabaseRepository {
   def apply[F[_] : Logger : Dispatcher]: DatabaseRepository[ConnectionIO] = new DatabaseRepository[ConnectionIO] {
     override def createDatabase(db: DatabaseMetadata): ConnectionIO[Database] =
       checkDatabaseExists(db)
-        .ifM(createDatabase(db.name, db.username), Logger[ConnectionIO].info(s"No-op: database ${db.name} already exists"))
+        .ifM(createDatabase(db.name), Logger[ConnectionIO].info(s"No-op: database ${db.name} already exists"))
         .as(db.name)
 
     private def checkDatabaseExists(db: DatabaseMetadata): ConnectionIO[Boolean] =
@@ -32,8 +32,8 @@ object DatabaseRepository {
         }
         .map(_ == 0)
 
-    private def createDatabase(database: Database, owner: MasterDatabaseUsername): ConnectionIO[Unit] =
-      DatabaseQueries.createDatabase(database, owner)
+    private def createDatabase(database: Database): ConnectionIO[Unit] =
+      DatabaseQueries.createDatabase(database)
         .run
         .flatTap { completion =>
           Logger[ConnectionIO].info(s"created database $database with status $completion")
@@ -51,14 +51,14 @@ object DatabaseRepository {
   }
 }
 
-// TODO MySQL queries
 object DatabaseQueries {
   def checkDatabaseExists(db: Database): Query0[Long] =
-    sql"SELECT count(*) as count FROM pg_catalog.pg_database WHERE pg_database.datname = ${db.id.value}"
+    sql"SELECT count(*) as count FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = ${db.id.value}"
       .query[Long]
 
-  def createDatabase(database: Database, owner: MasterDatabaseUsername): Update0 =
-    sql"CREATE DATABASE #${database.value} OWNER #${owner.value}"
+  // I don't think mysql has the concept of owners; access to the db is through roles/privileges alone
+  def createDatabase(database: Database): Update0 =
+    sql"CREATE DATABASE #${database.value}"
       .update
 
   def dropDatabase(database: Database): Update0 =
