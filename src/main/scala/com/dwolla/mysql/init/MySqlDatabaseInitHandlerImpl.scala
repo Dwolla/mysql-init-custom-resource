@@ -14,10 +14,12 @@ import doobie.implicits._
 import feral.lambda.INothing
 import feral.lambda.cloudformation._
 import org.typelevel.log4cats.Logger
+import retry._
+import retry.RetryDetails._
 
-import scala.util.control.NoStackTrace
+import scala.concurrent.duration.{DurationInt}
 
-class MySqlDatabaseInitHandlerImpl[F[_] : Concurrent : Logger : TransactorFactory](secretsManagerAlg: SecretsManagerAlg[F],
+class MySqlDatabaseInitHandlerImpl[F[_] : Sleep : Concurrent : Logger : TransactorFactory](secretsManagerAlg: SecretsManagerAlg[F],
                                                                                    databaseRepository: DatabaseRepository[ConnectionIO],
                                                                                    roleRepository: RoleRepository[ConnectionIO],
                                                                                    userRepository: UserRepository[ConnectionIO],
@@ -28,21 +30,21 @@ class MySqlDatabaseInitHandlerImpl[F[_] : Concurrent : Logger : TransactorFactor
   override def updateResource(event: DatabaseMetadata): F[HandlerResponse[INothing]] =
     handleCreateOrUpdate(event)(createOrUpdate(_, event)).map(HandlerResponse(_, None))
 
+  def logError(user: Username)(err: Throwable, details: RetryDetails): F[Unit] = details match {
+
+    case WillDelayAndRetry(_, _, _) =>
+      Logger[F].warn(err)(s"Failed when removing $user; retrying")
+      Sleep[F].sleep(5.seconds)
+
+    case GivingUp(totalRetries: Int, _) =>
+      Logger[F].error(err)(s"Failed when removing user after $totalRetries retries")
+      DependentObjectsStillExistButRetriesAreExhausted(user.value, err).raiseError[F, Unit]
+  }
+
   override def deleteResource(event: DatabaseMetadata): F[HandlerResponse[INothing]] =
     for {
       usernames <- getUsernamesFromSecrets(event.secretIds, UserRepository.usernameForDatabase(event.name))
-      dbId <- removeUsersFromDatabase(usernames, event.name).transact(TransactorFactory[F].buildTransactor(event))
-// TODO figure out how to implement this retry strategy (which was originally just on the user removal, but needs to operate in F[_], not ConnectionIO)
-//        .recoverWith {
-//          case SqlState.DependentObjectsStillExist(ex) if retries > 0 =>
-//            for {
-//              _ <- Logger[ConnectionIO].warn(ex)(s"Failed when removing $user")
-//              _ <- Temporal[ConnectionIO].sleep(5.seconds)
-//              user <- removeUser(user, retries - 1)
-//            } yield user
-//          case SqlState.DependentObjectsStillExist(ex) if retries == 0 =>
-//            Kleisli.liftF(DependentObjectsStillExistButRetriesAreExhausted(user.value, ex).raiseError[F, Username])
-//        }
+      dbId <- retryingOnAllErrors[PhysicalResourceId](RetryPolicies.limitRetries[F](5), onError = logError(usernames.head))(removeUsersFromDatabase(usernames, event.name).transact(TransactorFactory[F].buildTransactor(event)))
 
     } yield HandlerResponse(dbId, None)
 
@@ -167,8 +169,7 @@ case class ReservedWordAsIdentifier(users: List[Username]) extends InputValidati
 }
 
 object MySqlDatabaseInitHandlerImpl {
-  def apply[F[_] : Concurrent : Logger : Dispatcher : TransactorFactory](secretsManager: SecretsManagerAlg[F])
-                                                                        (implicit logHandler: LogHandler): MySqlDatabaseInitHandlerImpl[F] =
+  def apply[F[_] : Concurrent : Sleep : Logger : Dispatcher : TransactorFactory](secretsManager: SecretsManagerAlg[F]): MySqlDatabaseInitHandlerImpl[F] =
     new MySqlDatabaseInitHandlerImpl(
       secretsManager,
       DatabaseRepository[F],

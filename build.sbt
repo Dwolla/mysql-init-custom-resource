@@ -35,6 +35,7 @@ lazy val `mysql-init-custom-resource` = (project in file("."))
       val http4sVersion = "0.23.8"
       val awsSdkVersion = "2.17.118"
       val refinedV = "0.9.28"
+      val catsRetryVersion = "3.1.0"
 
       Seq(
         "org.typelevel" %% "feral-lambda-cloudformation-custom-resource" % feralVersion,
@@ -57,6 +58,7 @@ lazy val `mysql-init-custom-resource` = (project in file("."))
         "org.tpolecat" %% "doobie-refined" % doobieVersion,
         "mysql" % "mysql-connector-java" % "8.0.28" % Runtime,
         "com.ovoenergy" %% "natchez-extras-doobie" % "6.0.0",
+       "com.github.cb372" %% "cats-retry" % catsRetryVersion,
         "org.scalameta" %% "munit" % munitVersion % Test,
         "org.scalameta" %% "munit-scalacheck" % munitVersion % Test,
         "io.circe" %% "circe-literal" % circeVersion % Test,
