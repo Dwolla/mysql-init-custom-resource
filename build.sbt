@@ -29,7 +29,7 @@ lazy val `mysql-init-custom-resource` = (project in file("."))
     topLevelDirectory := None,
     libraryDependencies ++= {
       val natchezVersion = "0.1.6"
-      val feralVersion = "0.1.0-M1"
+      val feralVersion = "0.1.0-M4"
       val doobieVersion = "1.0.0-RC1"
       val munitVersion = "0.7.29"
       val circeVersion = "0.14.1"
@@ -46,6 +46,8 @@ lazy val `mysql-init-custom-resource` = (project in file("."))
         "io.circe" %% "circe-refined" % circeVersion,
         "io.estatico" %% "newtype" % "0.4.4",
         "org.typelevel" %% "log4cats-slf4j" % "2.1.1",
+        "com.amazonaws" % "aws-lambda-java-log4j2" % "1.5.1" % Runtime,
+        "org.apache.logging.log4j" % "log4j-slf4j-impl" % "2.17.1" % Runtime,
         "com.chuusai" %% "shapeless" % "2.3.7",
         "com.dwolla" %% "fs2-aws-java-sdk2" % "3.0.0-RC1",
         "software.amazon.awssdk" % "secretsmanager" % "2.17.102",
