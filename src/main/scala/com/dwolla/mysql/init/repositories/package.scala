@@ -4,7 +4,9 @@ import cats._
 import cats.effect.std.Dispatcher
 import cats.effect.syntax.all._
 import cats.syntax.all._
-import doobie.ConnectionIO
+import com.dwolla.mysql.init.repositories.MySqlErrorCodes.ER_NONEXISTING_GRANT
+import doobie._
+import doobie.syntax.all._
 import doobie.free.connection
 import org.typelevel.log4cats.Logger
 
@@ -22,10 +24,15 @@ package object repositories {
   implicit class IgnoreErrorOps[F[_], A](val fa: F[A]) extends AnyVal {
     def recoverUndefinedAs(a: A)
                           (implicit `[]`: MonadThrow[F]): F[A] =
-      fa.recover {
-        case _: OutOfMemoryError => a // TODO placeholder
-//        case SqlState.UndefinedObject(_) => a
-//        case SqlState.InvalidCatalogName(_) => a
+      fa.exceptSql {
+        case ex if ex.getErrorCode == ER_NONEXISTING_GRANT => a.pure[F]
+        case ex => ex.raiseError
       }
+  }
+}
+
+package repositories {
+  object MySqlErrorCodes {
+    val ER_NONEXISTING_GRANT = 1141
   }
 }

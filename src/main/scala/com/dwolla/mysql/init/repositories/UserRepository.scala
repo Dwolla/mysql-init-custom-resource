@@ -53,15 +53,15 @@ object UserQueries {
 
   def createUser(username: Username,
                  password: Password): Update0 =
-    sql"CREATE USER #${username.value} IDENTIFIED BY '#${password.value}'"
+    (fr"CREATE USER" ++ Fragment.const(username.value) ++ fr"IDENTIFIED BY '" ++ Fragment.const(password.value) ++ fr"'")
       .update
 
   def updateUser(username: Username,
                  password: Password): Update0 =
-    sql"ALTER USER #${username.value} IDENTIFIED BY '#${password.value}'"
+    (fr"ALTER USER" ++ Fragment.const(username.value) ++ fr"IDENTIFIED BY '" ++ Fragment.const(password.value) ++ fr"'")
       .update
 
   def removeUser(username: Username): Update0 =
-    sql"DROP USER IF EXISTS #${username.value}"
+    (fr"DROP USER IF EXISTS" ++ Fragment.const(username.value))
       .update
 }
