@@ -106,7 +106,7 @@ object RoleQueries {
 
   def revokeRole(userName: Username,
                  role: RoleName): Update0 =
-    (fr"REVOKE" ++ Fragment.const(userName.value) ++ fr"FROM" ++ Fragment.const(role.value))
+    (fr"REVOKE" ++ Fragment.const(role.value) ++ fr"FROM" ++ Fragment.const(userName.value))
       .update
 
   // Pretty sure roles and users are stored in the same table
@@ -120,11 +120,11 @@ object RoleQueries {
 
   // I think we need to run FLUSH PRIVILEGES to save these changes without restarting mysql
   def grantPrivilegesToRole(database: Database, role: RoleName): Update0 =
-    (fr"GRANT ALL PRIVILEGES ON" ++ Fragment.const(database.value) ++ fr".* TO" ++ Fragment.const(role.value))
+    (fr"GRANT ALL PRIVILEGES ON" ++ Fragment.const0(database.value) ++ fr".* TO" ++ Fragment.const(role.value))
       .update
 
   def revokePrivilegesFromRole(database: Database, role: RoleName): Update0 =
-    (fr"REVOKE ALL PRIVILEGES ON" ++ Fragment.const(database.value) ++ fr".* FROM" ++ Fragment.const(role.value))
+    (fr"REVOKE ALL PRIVILEGES ON" ++ Fragment.const0(database.value) ++ fr".* FROM" ++ Fragment.const(role.value))
       .update
 
   def dropRole(role: RoleName): Update0 =

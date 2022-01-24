@@ -1,9 +1,10 @@
 package com.dwolla.mysql.init
 
-import cats.syntax.all._
-import io.circe.generic.semiauto.deriveDecoder
+import io.circe._
+import io.circe.generic.semiauto._
 import io.circe.refined._
-import io.circe.{Decoder, HCursor}
+import shapeless.syntax.std.product._
+
 
 case class DatabaseMetadata(host: Host,
                             port: Port,
@@ -14,14 +15,21 @@ case class DatabaseMetadata(host: Host,
                            )
 
 object DatabaseMetadata {
-  implicit val DecodeDatabaseMetadata: Decoder[DatabaseMetadata] = (c: HCursor) =>
-    (c.downField("Host").as[Host],
-      c.downField("Port").as[Port],
-      c.downField("DatabaseName").as[Database],
-      c.downField("MasterDatabaseUsername").as[MasterDatabaseUsername],
-      c.downField("MasterDatabasePassword").as[MasterDatabasePassword],
-      c.downField("UserConnectionSecrets").as[List[SecretId]],
-      ).mapN(DatabaseMetadata.apply)
+  implicit val DecodeDatabaseMetadata: Decoder[DatabaseMetadata] =
+    Decoder.forProduct6("Host",
+      "Port",
+      "DatabaseName",
+      "MasterDatabaseUsername",
+      "MasterDatabasePassword",
+      "UserConnectionSecrets")(DatabaseMetadata.apply)
+
+  implicit val EncodeDatabaseMetadata: Encoder[DatabaseMetadata] =
+    Encoder.forProduct6("Host",
+      "Port",
+      "DatabaseName",
+      "MasterDatabaseUsername",
+      "MasterDatabasePassword",
+      "UserConnectionSecrets")(_.toTuple)
 }
 
 case class UserConnectionInfo(database: Database,
@@ -32,5 +40,5 @@ case class UserConnectionInfo(database: Database,
                              )
 
 object UserConnectionInfo {
-  implicit val UserConnectionInfoDecoder: Decoder[UserConnectionInfo] = deriveDecoder[UserConnectionInfo]
+  implicit val UserConnectionInfoCodec: Codec[UserConnectionInfo] = deriveCodec[UserConnectionInfo]
 }

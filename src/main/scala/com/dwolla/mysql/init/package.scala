@@ -3,7 +3,7 @@ package com.dwolla.mysql
 import eu.timepit.refined._
 import eu.timepit.refined.api.Refined
 import eu.timepit.refined.string._
-import io.circe.Decoder
+import io.circe.{Decoder, Encoder}
 import io.estatico.newtype.Coercible
 import io.estatico.newtype.macros.newtype
 import shapeless.ops.hlist
@@ -33,11 +33,12 @@ package object init {
                                                                      ): Migration[A, B] =
     a => bGen.from(inter.apply(aGen.to(a)))
 
-  type SqlIdentifierPredicate = MatchesRegex[W.`"[A-Za-z][A-Za-z0-9_]*"`.T]
+  type SqlIdentifierPredicate = MatchesRegex[W.`"[A-Za-z][A-Za-z0-9_]{0,63}"`.T]
   type SqlIdentifier = String Refined SqlIdentifierPredicate
   type GeneratedPasswordPredicate = MatchesRegex[W.`"""[-A-Za-z0-9!"#$%&()*+,./:<=>?@\\[\\]\\\\^_{|}~]+"""`.T]
   type GeneratedPassword = String Refined GeneratedPasswordPredicate
   implicit def coercibleDecoder[A, B](implicit ev: Coercible[Decoder[A], Decoder[B]], d: Decoder[A]): Decoder[B] = ev(d)
+  implicit def coercibleEncoder[A, B](implicit ev: Coercible[Encoder[A], Encoder[B]], e: Encoder[A]): Encoder[B] = ev(e)
 
   @newtype case class MasterDatabaseUsername(id: SqlIdentifier) {
     def value: String = id.value

@@ -2,7 +2,7 @@ ThisBuild / organization := "com.dwolla"
 ThisBuild / description := "CloudFormation custom resource to initialize a MySQL database with a new user"
 ThisBuild / homepage := Some(url("https://github.com/Dwolla/mysql-init-custom-resource"))
 ThisBuild / licenses += ("MIT", url("https://opensource.org/licenses/MIT"))
-ThisBuild / scalaVersion := "2.13.7"
+ThisBuild / scalaVersion := "2.13.8"
 ThisBuild / scalacOptions += "-Ymacro-annotations"
 ThisBuild / developers := List(
   Developer(
@@ -33,6 +33,11 @@ lazy val `mysql-init-custom-resource` = (project in file("."))
       val doobieVersion = "1.0.0-RC1"
       val munitVersion = "0.7.29"
       val circeVersion = "0.14.1"
+      val scalacheckEffectVersion = "1.0.3"
+      val log4catsVersion = "2.2.0"
+      val monocleVersion = "3.1.0"
+      val http4sVersion = "0.23.7"
+      val awsSdkVersion = "2.17.112"
 
       Seq(
         "org.typelevel" %% "feral-lambda-cloudformation-custom-resource" % feralVersion,
@@ -40,17 +45,17 @@ lazy val `mysql-init-custom-resource` = (project in file("."))
         "org.tpolecat" %% "natchez-xray" % natchezVersion,
         "org.tpolecat" %% "natchez-http4s" % "0.2.0",
         "org.typelevel" %% "cats-tagless-macros" % "0.14.0",
-        "org.http4s" %% "http4s-ember-client" % "0.23.7",
+        "org.http4s" %% "http4s-ember-client" % http4sVersion,
         "io.circe" %% "circe-parser" % circeVersion,
         "io.circe" %% "circe-generic" % circeVersion,
         "io.circe" %% "circe-refined" % circeVersion,
         "io.estatico" %% "newtype" % "0.4.4",
-        "org.typelevel" %% "log4cats-slf4j" % "2.1.1",
+        "org.typelevel" %% "log4cats-slf4j" % log4catsVersion,
         "com.amazonaws" % "aws-lambda-java-log4j2" % "1.5.1" % Runtime,
         "org.apache.logging.log4j" % "log4j-slf4j-impl" % "2.17.1" % Runtime,
         "com.chuusai" %% "shapeless" % "2.3.7",
         "com.dwolla" %% "fs2-aws-java-sdk2" % "3.0.0-RC1",
-        "software.amazon.awssdk" % "secretsmanager" % "2.17.102",
+        "software.amazon.awssdk" % "secretsmanager" % awsSdkVersion,
         "org.tpolecat" %% "doobie-core" % doobieVersion,
         "org.tpolecat" %% "doobie-refined" % doobieVersion,
         "mysql" % "mysql-connector-java" % "8.0.28" % Runtime,
@@ -58,8 +63,19 @@ lazy val `mysql-init-custom-resource` = (project in file("."))
         "org.scalameta" %% "munit" % munitVersion % Test,
         "org.scalameta" %% "munit-scalacheck" % munitVersion % Test,
         "io.circe" %% "circe-literal" % circeVersion % Test,
+        "org.typelevel" %% "munit-cats-effect-3" % "1.0.7" % Test,
+        "org.typelevel" %% "scalacheck-effect" % scalacheckEffectVersion % Test,
+        "org.typelevel" %% "scalacheck-effect-munit" % scalacheckEffectVersion % Test,
+        "org.typelevel" %% "log4cats-noop" % log4catsVersion % Test,
+        "io.circe" %% "circe-testing" % circeVersion % Test,
+        "dev.optics" %% "monocle-core" % monocleVersion % Test,
+        "dev.optics" %% "monocle-macro" % monocleVersion % Test,
+        "org.http4s" %% "http4s-dsl" % http4sVersion % Test,
+        "com.eed3si9n.expecty" %% "expecty" % "0.15.4" % Test,
+        "software.amazon.awssdk" % "sts" % awsSdkVersion % Test,
       )
     },
+    Test / testOptions += Tests.Argument(TestFrameworks.MUnit, "--exclude-tags=IntegrationTest"),
   )
   .enablePlugins(UniversalPlugin, JavaAppPackaging)
 

@@ -48,7 +48,7 @@ class MySqlDatabaseInitHandlerImpl[F[_] : Concurrent : Logger : TransactorFactor
       _ <- databaseRepository.createDatabase(input)
       _ <- roleRepository.createRole(input.name)
       _ <- userPasswords.traverse { userPassword =>
-        userRepository.addOrUpdateUser(userPassword) >> roleRepository.addUserToRole(userPassword.user, userPassword.database)
+        userRepository.addOrUpdateUser(userPassword) >> roleRepository.addUserToRole(userPassword.user, input.name)
       }
     } yield db
 
