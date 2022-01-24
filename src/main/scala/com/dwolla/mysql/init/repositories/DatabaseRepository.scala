@@ -58,10 +58,10 @@ object DatabaseQueries {
 
   // I don't think mysql has the concept of owners; access to the db is through roles/privileges alone
   def createDatabase(database: Database): Update0 =
-    sql"CREATE DATABASE #${database.value}"
+    (fr"CREATE DATABASE" ++ Fragment.const(database.value))
       .update
 
   def dropDatabase(database: Database): Update0 =
-    sql"DROP DATABASE IF EXISTS #${database.value}"
+    (fr"DROP DATABASE IF EXISTS" ++ Fragment.const(database.value))
       .update
 }

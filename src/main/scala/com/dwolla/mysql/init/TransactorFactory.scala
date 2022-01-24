@@ -16,7 +16,7 @@ object TransactorFactory {
   def instance[F[_] : Async]: TransactorFactory[F] =
     event => Transactor.fromDriverManager[F](
       "com.mysql.cj.jdbc.Driver",
-      mysqlConnectionUrl(event.host, event.port, event.name),
+      mysqlConnectionUrl(event.host, event.port),
       event.username.value,
       event.password.value
     )
@@ -25,8 +25,7 @@ object TransactorFactory {
     event => TracedTransactor(service, TransactorFactory.instance[F].buildTransactor(event))
 
   private def mysqlConnectionUrl(host: Host,
-                                 port: Port,
-                                 database: Database): String =
-    s"jdbc:mysql://$host:$port/$database"
+                                 port: Port): String =
+    s"jdbc:mysql://$host:$port"
 
 }

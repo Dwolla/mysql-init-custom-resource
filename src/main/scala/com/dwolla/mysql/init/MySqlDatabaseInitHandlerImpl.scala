@@ -1,8 +1,10 @@
 package com.dwolla.mysql.init
 
+import cats.ApplicativeThrow
 import cats.effect.std.Dispatcher
 import cats.effect.{Trace => _, _}
 import cats.syntax.all._
+import com.dwolla.mysql.init.MySqlDatabaseInitHandlerImpl.databaseAsPhysicalResourceId
 import com.dwolla.mysql.init.aws.{ResourceNotFoundException, SecretsManagerAlg}
 import com.dwolla.mysql.init.repositories._
 import doobie._
@@ -40,17 +42,15 @@ class MySqlDatabaseInitHandlerImpl[F[_] : Concurrent : Logger : TransactorFactor
 
     } yield HandlerResponse(dbId, None)
 
-  private def databaseAsPhysicalResourceId(db: Database): PhysicalResourceId =
-    PhysicalResourceId(db.value)
-
   private def createOrUpdate(userPasswords: List[UserConnectionInfo], input: DatabaseMetadata): ConnectionIO[PhysicalResourceId] =
     for {
-      db <- databaseRepository.createDatabase(input)
+      db <- databaseAsPhysicalResourceId[ConnectionIO](input.name)
+      _ <- databaseRepository.createDatabase(input)
       _ <- roleRepository.createRole(input.name)
       _ <- userPasswords.traverse { userPassword =>
         userRepository.addOrUpdateUser(userPassword) >> roleRepository.addUserToRole(userPassword.user, userPassword.database)
       }
-    } yield databaseAsPhysicalResourceId(db)
+    } yield db
 
   private def handleCreateOrUpdate(input: DatabaseMetadata)
                                   (f: List[UserConnectionInfo] => ConnectionIO[PhysicalResourceId]): F[PhysicalResourceId] =
@@ -72,11 +72,12 @@ class MySqlDatabaseInitHandlerImpl[F[_] : Concurrent : Logger : TransactorFactor
 
   private def removeUsersFromDatabase(usernames: List[Username], databaseName: Database): ConnectionIO[PhysicalResourceId] =
     for {
+      db <- databaseAsPhysicalResourceId[ConnectionIO](databaseName)
       _ <- usernames.traverse(roleRepository.removeUserFromRole(_, databaseName))
-      db <- databaseRepository.removeDatabase(databaseName)
+      _ <- databaseRepository.removeDatabase(databaseName)
       _ <- roleRepository.removeRole(databaseName)
       _ <- usernames.traverse(userRepository.removeUser)
-    } yield databaseAsPhysicalResourceId(db)
+    } yield db
 }
 
 object MySqlDatabaseInitHandlerImpl {
@@ -87,4 +88,7 @@ object MySqlDatabaseInitHandlerImpl {
       RoleRepository[F],
       UserRepository[F],
     )
+
+  private[MySqlDatabaseInitHandlerImpl] def databaseAsPhysicalResourceId[F[_] : ApplicativeThrow](db: Database): F[PhysicalResourceId] =
+    PhysicalResourceId(db.value).liftTo[F](new RuntimeException("Database name was invalid as Physical Resource ID"))
 }

@@ -99,15 +99,14 @@ object RoleRepository {
 }
 
 object RoleQueries {
-  // Is this supposed to be GRANT role TO user?
   def grantRole(userName: Username,
                 role: RoleName): Update0 =
-    sql"GRANT #${userName.value} TO #${role.value}"
+    (fr"GRANT" ++ Fragment.const(role.value) ++ fr"TO" ++ Fragment.const(userName.value))
       .update
 
   def revokeRole(userName: Username,
                  role: RoleName): Update0 =
-    sql"REVOKE #${userName.value} FROM #${role.value}"
+    (fr"REVOKE" ++ Fragment.const(userName.value) ++ fr"FROM" ++ Fragment.const(role.value))
       .update
 
   // Pretty sure roles and users are stored in the same table
@@ -116,20 +115,20 @@ object RoleQueries {
       .query[Long]
 
   def createRole(role: RoleName): Update0 =
-    sql"CREATE ROLE #${role.value}"
+    (fr"CREATE ROLE" ++ Fragment.const(role.value))
       .update
 
   // I think we need to run FLUSH PRIVILEGES to save these changes without restarting mysql
   def grantPrivilegesToRole(database: Database, role: RoleName): Update0 =
-    sql"GRANT ALL PRIVILEGES ON #${database.value}.* TO #${role.value}"
+    (fr"GRANT ALL PRIVILEGES ON" ++ Fragment.const(database.value) ++ fr".* TO" ++ Fragment.const(role.value))
       .update
 
   def revokePrivilegesFromRole(database: Database, role: RoleName): Update0 =
-    sql"REVOKE ALL PRIVILEGES ON #${database.value}.* FROM #${role.value}"
+    (fr"REVOKE ALL PRIVILEGES ON" ++ Fragment.const(database.value) ++ fr".* FROM" ++ Fragment.const(role.value))
       .update
 
   def dropRole(role: RoleName): Update0 =
-    sql"DROP ROLE IF EXISTS #${role.value}"
+    (fr"DROP ROLE IF EXISTS" ++ Fragment.const(role.value))
       .update
 
 }
