@@ -18,11 +18,6 @@ ThisBuild / libraryDependencies ++= Seq(
   compilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.1"),
 )
 
-ThisBuild / githubWorkflowJavaVersions := Seq(JavaSpec.temurin("8"), JavaSpec.temurin("11"))
-ThisBuild / githubWorkflowTargetTags ++= Seq("v*")
-ThisBuild / githubWorkflowPublishTargetBranches := Seq.empty
-ThisBuild / githubWorkflowPublish := Seq.empty
-
 lazy val `mysql-init-custom-resource` = (project in file("."))
   .settings(
     maintainer := developers.value.head.email,
@@ -75,7 +70,6 @@ lazy val `mysql-init-custom-resource` = (project in file("."))
         "software.amazon.awssdk" % "sts" % awsSdkVersion % Test,
       )
     },
-    Test / testOptions += Tests.Argument(TestFrameworks.MUnit, "--exclude-tags=IntegrationTest"),
   )
   .enablePlugins(UniversalPlugin, JavaAppPackaging)
 
