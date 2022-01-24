@@ -33,7 +33,7 @@ class MySqlDatabaseInitHandlerF[F[_] : Async] {
         case Some(addr) => XRay.entryPoint(addr)
         case None => XRay.entryPoint[F]()
       }
-      secretsManager <- SecretsManagerAlg.resource[F].map(_.mapK(Kleisli.liftK[F, Span[F]]).withTracing)
+      secretsManager <- secretsManagerResource
     } yield { implicit env: LambdaEnv[F, CloudFormationCustomResourceRequest[DatabaseMetadata]] =>
       implicit val transactorFactory: TransactorFactory[Kleisli[F, Span[F], *]] = TransactorFactory.tracedInstance[F]("MySqlDatabaseInitHandler")
 
@@ -46,6 +46,9 @@ class MySqlDatabaseInitHandlerF[F[_] : Async] {
    * The XRay kernel comes from environment variables, so we don't need to extract anything from the incoming event
    */
   private implicit def kernelSource[Event]: KernelSource[Event] = KernelSource.emptyKernelSource
+
+  protected def secretsManagerResource(implicit L: Logger[F]): Resource[F, SecretsManagerAlg[Kleisli[F, Span[F], *]]] =
+    SecretsManagerAlg.resource[F].map(_.mapK(Kleisli.liftK[F, Span[F]]).withTracing)
 
   protected def httpClient: Resource[F, Client[F]] =
     EmberClientBuilder

@@ -1,12 +1,14 @@
 package com.dwolla.mysql.init
 
 import cats._
+import cats.data._
 import cats.effect._
 import cats.syntax.all._
+import cats.tagless.syntax.all._
 import com.dwolla.mysql.init.FakeS3.CapturedRequests
 import com.dwolla.mysql.init.aws.SecretDeletionRecoveryTime.Immediate
-import com.dwolla.mysql.init.aws.SecretsManagerAlg
-import com.dwolla.mysql.init.aws.SecretsManagerAlg.SecretNamePredicate
+import com.dwolla.mysql.init.aws.SecretsManagerAlg.{SecretName, SecretNamePredicate}
+import com.dwolla.mysql.init.aws.{SecretDeletionRecoveryTime, SecretsManagerAlg}
 import com.dwolla.testutils.IntegrationTest
 import com.eed3si9n.expecty.Expecty.expect
 import eu.timepit.refined.auto._
@@ -14,9 +16,10 @@ import eu.timepit.refined.refineV
 import feral.lambda.cloudformation.RequestResponseStatus.Success
 import feral.lambda.cloudformation.{CloudFormationCustomResourceArbitraries, CloudFormationCustomResourceRequest, CloudFormationCustomResourceResponse, CloudFormationRequestType}
 import feral.lambda.{LambdaEnv, TestContext}
-import io.circe.{Decoder, Encoder, Json}
+import io.circe.{Decoder, Encoder, Json, parser}
 import monocle.syntax.all._
 import munit._
+import natchez.Span
 import org.http4s.client.Client
 import org.http4s.dsl.Http4sDsl
 import org.http4s.{HttpApp, Request}
@@ -25,7 +28,6 @@ import org.scalacheck.effect.PropF
 import org.scalacheck.{Arbitrary, Gen}
 import org.typelevel.jawn.Parser
 import org.typelevel.log4cats.Logger
-import org.typelevel.log4cats.noop.NoOpLogger
 
 import scala.concurrent.duration._
 
@@ -37,8 +39,6 @@ class RoundTripIntegrationTest
     with ArbitraryRefinedTypes {
 
   override def munitTimeout: Duration = 10.minutes
-
-  private implicit def logger[F[_] : Applicative]: Logger[F] = NoOpLogger[F]
 
   private def genResources[F[_] : Monad, A](max: Int = 10)
                                            (implicit R: Arbitrary[Resource[F, A]]): Gen[Resource[F, List[A]]] =
@@ -80,9 +80,14 @@ class RoundTripIntegrationTest
     } yield secrets.map(DatabaseMetadata(host, port, database, username, password, _))
   }
 
+  /**
+   * Secrets Manager secrets cost $0.40 / month, so it could be expensive to run this using the real
+   * Secrets Manager service. That said, if you want to run the test that way, replace the
+   * {{{FakeSecretsManagerAlg}}} with {{{SecretsManagerAlg.resource[IO]}}}.
+   */
   private val secretsManagerAlg: Fixture[SecretsManagerAlg[IO]] = ResourceSuiteLocalFixture(
     "SecretsManagerAlg",
-    SecretsManagerAlg.resource[IO]
+    Ref.in[Resource[IO, *], IO, Map[SecretId, String]](Map.empty).map(new FakeSecretsManagerAlg(_))
   )
 
   override def munitFixtures = List(secretsManagerAlg)
@@ -98,6 +103,8 @@ class RoundTripIntegrationTest
         requestTemplate <- secrets
         handler <- new MySqlDatabaseInitHandlerF[IO] {
           override protected def httpClient: Resource[IO, Client[IO]] = client.pure[Resource[IO, *]]
+          override protected def secretsManagerResource(implicit L: Logger[IO]): Resource[IO, SecretsManagerAlg[Kleisli[IO, Span[IO], *]]] =
+            secretsManagerAlg().mapK(Kleisli.liftK[IO, Span[IO]]).pure[Resource[IO, *]]
         }.handler
       } yield (requestCapture, requestTemplate.focus(_.RequestType).replace(_), handler)
 
@@ -152,4 +159,22 @@ object FakeS3 {
 
   def apply[F[_] : Async](capture: Ref[F, CapturedRequests[F]]): Client[F] =
     Client.fromHttpApp(new FakeS3(capture).captureRequestsAndRespondWithOk)
+}
+
+class FakeSecretsManagerAlg[F[_] : MonadThrow](secrets: Ref[F, Map[SecretId, String]]) extends SecretsManagerAlg[F] {
+  override def getSecret(secretId: SecretId): F[String] =
+    secrets.get.map(_(secretId))
+
+  override def getSecretAs[A: Decoder](secretId: SecretId): F[A] =
+    for {
+      secretString <- getSecret(secretId)
+      secretJson <- parser.parse(secretString).liftTo[F]
+      a <- secretJson.as[A].liftTo[F]
+    } yield a
+
+  override def createSecret(name: SecretName, secret: String): F[SecretId] =
+    secrets.update(_ + (SecretId(name.value) -> secret)).as(SecretId(name.value))
+
+  override def deleteSecret(id: SecretId, deletionTimeFrame: SecretDeletionRecoveryTime): F[Unit] =
+    secrets.update(_ - id)
 }
