@@ -9,14 +9,16 @@ import com.dwolla.mysql.init.FakeS3.CapturedRequests
 import com.dwolla.mysql.init.aws.SecretDeletionRecoveryTime.Immediate
 import com.dwolla.mysql.init.aws.SecretsManagerAlg.{SecretName, SecretNamePredicate}
 import com.dwolla.mysql.init.aws.{SecretDeletionRecoveryTime, SecretsManagerAlg}
-import com.dwolla.testutils.IntegrationTest
 import com.eed3si9n.expecty.Expecty.expect
 import eu.timepit.refined.auto._
 import eu.timepit.refined.refineV
-import feral.lambda.cloudformation.RequestResponseStatus.Success
-import feral.lambda.cloudformation.{CloudFormationCustomResourceArbitraries, CloudFormationCustomResourceRequest, CloudFormationCustomResourceResponse, CloudFormationRequestType}
+import feral.lambda.cloudformation.RequestResponseStatus._
+import feral.lambda.cloudformation.{CloudFormationCustomResourceArbitraries, CloudFormationCustomResourceRequest, CloudFormationCustomResourceResponse, CloudFormationRequestType, RequestResponseStatus}
 import feral.lambda.{LambdaEnv, TestContext}
+import io.circe.syntax._
 import io.circe.{Decoder, Encoder, Json, parser}
+import monocle._
+import monocle.macros._
 import monocle.syntax.all._
 import munit._
 import natchez.Span
@@ -25,9 +27,11 @@ import org.http4s.dsl.Http4sDsl
 import org.http4s.{HttpApp, Request}
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.effect.PropF
+import org.scalacheck.util.Pretty
 import org.scalacheck.{Arbitrary, Gen}
 import org.typelevel.jawn.Parser
 import org.typelevel.log4cats.Logger
+import _root_.io.circe.optics.JsonPath._
 
 import scala.concurrent.duration._
 
@@ -59,7 +63,7 @@ class RoundTripIntegrationTest
       database <- maybeDatabase.fold(arbitrary[SqlIdentifier].map(Database(_)))(Gen.const)
       host <- Gen.const(Host("localhost"))
       port <- Gen.const(Port(3306))
-      user <- arbitrary[SqlIdentifier].map(Username(_))
+      user <- arbitrary[MySqlUser].map(Username(_))
       password <- arbitrary[GeneratedPassword].map(Password(_))
     } yield UserConnectionInfo(database, host, port, user, password)
 
@@ -69,7 +73,7 @@ class RoundTripIntegrationTest
       host <- Gen.const(Host("localhost"))
       port <- Gen.const(Port(3306))
       database <- arbitrary[SqlIdentifier].map(Database(_))
-      username <- Gen.const[SqlIdentifier]("root").map(MasterDatabaseUsername(_))
+      username <- Gen.const[MySqlUser]("root").map(MasterDatabaseUsername(_))
       password <- Gen.const("password").map(MasterDatabasePassword(_))
       secrets <- {
         implicit val arbA: Arbitrary[A] = Arbitrary(genA(database.some))
@@ -90,52 +94,80 @@ class RoundTripIntegrationTest
     Ref.in[Resource[IO, *], IO, Map[SecretId, String]](Map.empty).map(new FakeSecretsManagerAlg(_))
   )
 
+  private implicit val prettyRequestResource: Resource[IO, CloudFormationCustomResourceRequest[DatabaseMetadata]] => Pretty = {
+    case Resource.Pure(req) => Pretty(_ => req.asJson.spaces2)
+    case other => Pretty { _ =>
+      other.use { req =>
+        req
+          .ResourceProperties
+          .secretIds
+          .traverse(secretsManagerAlg().getSecret(_).flatMap(parser.parse(_).liftTo[IO]))
+          .map { secrets =>
+            req
+              .asJson
+              .mapObject(_.add("Materialized Secrets (this key is synthetic and not part of the AWS protocol)", secrets.asJson))
+              .spaces2
+          }
+      }.unsafeRunSync() // this would normally be illegal, but it's probably fine here since this only happens when a test failed anyway
+    }
+  }
+
   override def munitFixtures = List(secretsManagerAlg)
 
-  test("Handler can create and destroy a database with users".tag(IntegrationTest)) {
+  private def requestTypeLens[T]: Lens[CloudFormationCustomResourceRequest[T], CloudFormationRequestType] = GenLens[CloudFormationCustomResourceRequest[T]](_.RequestType)
+
+  test("Handler can create and destroy a database with users") {
     implicit val arbDatabaseMetadata: Arbitrary[Resource[IO, DatabaseMetadata]] = Arbitrary(genDatabaseMetadata[IO, UserConnectionInfo](secretsManagerAlg(), genUserConnectionInfo))
     implicit val arbReq: Arbitrary[Resource[IO, CloudFormationCustomResourceRequest[DatabaseMetadata]]] = Arbitrary(genWrappedCloudFormationCustomResourceRequest[Resource[IO, *], DatabaseMetadata])
 
-    PropF.forAllF { secrets: Resource[IO, CloudFormationCustomResourceRequest[DatabaseMetadata]] =>
+    PropF.forAllF { input: Resource[IO, CloudFormationCustomResourceRequest[DatabaseMetadata]] =>
       val r = for {
         requestCapture <- Ref.in[Resource[IO, *], IO, CapturedRequests[IO]](List.empty)
         client = FakeS3(requestCapture)
-        requestTemplate <- secrets
+        requestTemplate <- input
         handler <- new MySqlDatabaseInitHandlerF[IO] {
           override protected def httpClient: Resource[IO, Client[IO]] = client.pure[Resource[IO, *]]
           override protected def secretsManagerResource(implicit L: Logger[IO]): Resource[IO, SecretsManagerAlg[Kleisli[IO, Span[IO], *]]] =
             secretsManagerAlg().mapK(Kleisli.liftK[IO, Span[IO]]).pure[Resource[IO, *]]
         }.handler
-      } yield (requestCapture, requestTemplate.focus(_.RequestType).replace(_), handler)
+        secrets <- Resource.eval(requestTemplate.ResourceProperties.secretIds.traverse(secretsManagerAlg().getSecretAs[UserConnectionInfo]))
+      } yield (requestCapture, requestTemplate.applyLens(requestTypeLens).set(_), handler, secrets)
 
-      r.use { case (requestCapture, requestTemplate, handler) =>
-        for {
-          _ <- handler(LambdaEnv.pure(requestTemplate(CloudFormationRequestType.CreateRequest), TestContext[IO]))
-          _ <- requestCapture.get.flatMap(expectNSuccessfulResponses(1))
-          _ <- handler(LambdaEnv.pure(requestTemplate(CloudFormationRequestType.DeleteRequest), TestContext[IO]))
-          _ <- requestCapture.get.flatMap(expectNSuccessfulResponses(2))
-        } yield ()
+      r.use { case (requestCapture, requestTemplate, handler, secrets) =>
+        if (!containsDuplicateUsers(secrets))
+          for {
+            _ <- handler(LambdaEnv.pure(requestTemplate(CloudFormationRequestType.CreateRequest), TestContext[IO]))
+            _ <- requestCapture.get.flatMap(expectNSuccessfulResponses(1))
+            _ <- handler(LambdaEnv.pure(requestTemplate(CloudFormationRequestType.DeleteRequest), TestContext[IO]))
+            _ <- requestCapture.get.flatMap(expectNSuccessfulResponses(2))
+          } yield ()
+        else
+          for {
+            _ <- handler(LambdaEnv.pure(requestTemplate(CloudFormationRequestType.CreateRequest), TestContext[IO]))
+            _ <- requestCapture.get.flatMap(expectDuplicateUsersError(_))
+          } yield ()
       }
     }
   }
 
+  private def containsDuplicateUsers(secrets: List[UserConnectionInfo]): Boolean =
+    secrets.groupBy(_.user).values.exists(_.length > 1)
+
+  def expectDuplicateUsersError(requests: CapturedRequests[IO]): IO[Unit] = IO {
+    val requestInTuple = GenLens[(Request[IO], Json)](_._2)
+    val findRequest = Optional[CapturedRequests[IO], (Request[IO], Json)](_.headOption)(t => l => t :: l.tail).composeLens(requestInTuple)
+
+    val status = root.Status.as[RequestResponseStatus]
+    val reason = root.Reason.as[String]
+
+    expect((findRequest composeOptional status).getOption(requests) == Failed.some)
+    expect((reason compose findRequest).getOption(requests).exists(_.startsWith("The specified secrets refer to users that share database and usernames. Deduplicate the input and try again.")))
+  }
+
   def expectNSuccessfulResponses(n: Int)
                                 (requests: CapturedRequests[IO]): IO[Unit] = IO {
-    // TODO remove this when it's fixed upstream
-    implicit val decoder: Decoder[CloudFormationCustomResourceResponse] =
-      CloudFormationCustomResourceResponse.CloudFormationCustomResourceResponseDecoder
-        .prepare {
-          _.withFocus {
-            _.mapObject { obj =>
-              if (obj.contains("Data")) obj
-              else obj.add("Data", Json.Null)
-            }
-          }
-        }
-
     expect(requests.length == n)
-    if (n == 1) expect(requests.head._2.as[CloudFormationCustomResourceResponse].map(_.Status) == Right(Success))
-    else expect(requests.forall { case (_, json) => json.as[CloudFormationCustomResourceResponse].map(_.Status) == Right(Success) })
+    expect(requests.forall { case (_, json) => json.as[CloudFormationCustomResourceResponse].map(_.Status) == Right(Success) })
   }
 
 }

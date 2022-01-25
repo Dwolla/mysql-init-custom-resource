@@ -1,6 +1,7 @@
 package com.dwolla.mysql.init
 
 import cats.ApplicativeThrow
+import cats.data.{EitherNel, NonEmptyList}
 import cats.effect.std.Dispatcher
 import cats.effect.{Trace => _, _}
 import cats.syntax.all._
@@ -12,6 +13,8 @@ import doobie.implicits._
 import feral.lambda.INothing
 import feral.lambda.cloudformation._
 import org.typelevel.log4cats.Logger
+
+import scala.util.control.NoStackTrace
 
 class MySqlDatabaseInitHandlerImpl[F[_] : Concurrent : Logger : TransactorFactory](secretsManagerAlg: SecretsManagerAlg[F],
                                                                                    databaseRepository: DatabaseRepository[ConnectionIO],
@@ -56,6 +59,13 @@ class MySqlDatabaseInitHandlerImpl[F[_] : Concurrent : Logger : TransactorFactor
                                   (f: List[UserConnectionInfo] => ConnectionIO[PhysicalResourceId]): F[PhysicalResourceId] =
     for {
       userPasswords <- input.secretIds.traverse(secretsManagerAlg.getSecretAs[UserConnectionInfo])
+      _ <- List(
+          ensureDatabaseConnectionInfoMatches(userPasswords, input),
+          ensureNoDuplicateUsers(userPasswords),
+        )
+        .parSequence
+        .leftMap(InputValidationException(_))
+        .liftTo[F]
       id <- f(userPasswords).transact(TransactorFactory[F].buildTransactor(input))
     } yield id
 
@@ -78,6 +88,56 @@ class MySqlDatabaseInitHandlerImpl[F[_] : Concurrent : Logger : TransactorFactor
       _ <- roleRepository.removeRole(databaseName)
       _ <- usernames.traverse(userRepository.removeUser)
     } yield db
+
+  private def ensureDatabaseConnectionInfoMatches(users: List[UserConnectionInfo], db: DatabaseMetadata): EitherNel[InputValidationError, Unit] = {
+    val mismatches =
+      users
+        .filterNot { uci =>
+          uci.database == db.name && uci.host == db.host && uci.port == db.port
+        }
+        .map(_.user)
+
+    if (mismatches.isEmpty) ().rightNel
+    else WrongDatabaseConnection(mismatches, db).leftNel
+  }
+
+  private def ensureNoDuplicateUsers(users: List[UserConnectionInfo]): EitherNel[InputValidationError, Unit] = {
+    val duplicates: Iterable[Username] =
+      users
+        .groupBy(_.user)
+        .filter {
+          case (_, l) => l.length > 1
+        }
+        .keys
+
+    if (duplicates.isEmpty) ().rightNel
+    else DuplicateUsers(duplicates).leftNel
+  }
+}
+
+sealed trait InputValidationError {
+  val message: String
+}
+
+case class InputValidationException(errors: NonEmptyList[InputValidationError]) extends RuntimeException(
+  errors.map(_.message).mkString_("\n")
+) with NoStackTrace
+
+case class WrongDatabaseConnection(users: List[Username], db: DatabaseMetadata) extends InputValidationError {
+  val message: String =
+    s"""The specified secrets contain database connection information that doesn't match the database instance being initialized:
+       |
+       |Expected database instance: mysql://${db.host}:${db.port}/${db.name}"
+       |
+       |Mismatched users:
+       |${users.mkString(" - ", "\n - ", "")}""".stripMargin
+}
+
+case class DuplicateUsers(users: Iterable[Username]) extends InputValidationError {
+  val message: String =
+    s"""The specified secrets refer to users that share database and usernames. Deduplicate the input and try again.
+       |
+       |${users.mkString(" - ", "\n - ", "")}""".stripMargin
 }
 
 object MySqlDatabaseInitHandlerImpl {

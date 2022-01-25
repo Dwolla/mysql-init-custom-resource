@@ -16,6 +16,16 @@ trait ArbitraryRefinedTypes {
     } yield refined.pure[F]
   implicit val arbSqlIdentifier: Arbitrary[SqlIdentifier] = Arbitrary(genSqlIdentifier[Id])
 
+  implicit val shrinkMySqlUser: Shrink[MySqlUser] = Shrink.shrinkAny
+  def genMySqlUser[F[_] : Applicative]: Gen[F[MySqlUser]] =
+    for {
+      initial <- Gen.alphaChar
+      len <- Gen.chooseNum(0, 63)
+      tail <- Gen.stringOfN(len, Gen.oneOf(Gen.alphaChar, Gen.numChar, Gen.const('_')))
+      refined <- refineV[MySqlUserPredicate](s"$initial$tail").fold(_ => Gen.fail, Gen.const)
+    } yield refined.pure[F]
+  implicit val arbMySqlUser: Arbitrary[MySqlUser] = Arbitrary(genMySqlUser[Id])
+
   implicit val shrinkGeneratedPassword: Shrink[GeneratedPassword] = Shrink.shrinkAny
   def genGeneratedPassword[F[_] : Applicative]: Gen[F[GeneratedPassword]] = {
     val allowedPunctuation: Gen[Char] = Gen.oneOf("""! " # $ % & ( ) * + , - . / : < = > ? @ [ \ ] ^ _ { | } ~ """.replaceAll(" ", "").toList)

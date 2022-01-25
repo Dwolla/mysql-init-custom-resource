@@ -17,6 +17,7 @@ ThisBuild / libraryDependencies ++= Seq(
   compilerPlugin("org.typelevel" %% "kind-projector" % "0.13.2" cross CrossVersion.full),
   compilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.1"),
 )
+ThisBuild / resolvers += Resolver.sonatypeRepo("snapshots")
 
 lazy val `mysql-init-custom-resource` = (project in file("."))
   .settings(
@@ -24,13 +25,13 @@ lazy val `mysql-init-custom-resource` = (project in file("."))
     topLevelDirectory := None,
     libraryDependencies ++= {
       val natchezVersion = "0.1.6"
-      val feralVersion = "0.1.0-M4"
+      val feralVersion = "0.1-cf71fa2-SNAPSHOT"
       val doobieVersion = "1.0.0-RC1"
       val munitVersion = "0.7.29"
       val circeVersion = "0.14.1"
       val scalacheckEffectVersion = "1.0.3"
       val log4catsVersion = "2.2.0"
-      val monocleVersion = "3.1.0"
+      val monocleVersion = "2.1.0"
       val http4sVersion = "0.23.7"
       val awsSdkVersion = "2.17.112"
 
@@ -63,8 +64,9 @@ lazy val `mysql-init-custom-resource` = (project in file("."))
         "org.typelevel" %% "scalacheck-effect-munit" % scalacheckEffectVersion % Test,
         "org.typelevel" %% "log4cats-noop" % log4catsVersion % Test,
         "io.circe" %% "circe-testing" % circeVersion % Test,
-        "dev.optics" %% "monocle-core" % monocleVersion % Test,
-        "dev.optics" %% "monocle-macro" % monocleVersion % Test,
+        "io.circe" %% "circe-optics" % circeVersion % Test,
+        "com.github.julien-truffaut" %% "monocle-core" % monocleVersion % Test,
+        "com.github.julien-truffaut" %% "monocle-macro" % monocleVersion % Test,
         "org.http4s" %% "http4s-dsl" % http4sVersion % Test,
         "com.eed3si9n.expecty" %% "expecty" % "0.15.4" % Test,
         "software.amazon.awssdk" % "sts" % awsSdkVersion % Test,

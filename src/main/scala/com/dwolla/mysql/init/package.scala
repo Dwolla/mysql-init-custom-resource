@@ -2,7 +2,7 @@ package com.dwolla.mysql
 
 import eu.timepit.refined._
 import eu.timepit.refined.api.Refined
-import eu.timepit.refined.string._
+import eu.timepit.refined.predicates.all._
 import io.circe.{Decoder, Encoder}
 import io.estatico.newtype.Coercible
 import io.estatico.newtype.macros.newtype
@@ -33,14 +33,16 @@ package object init {
                                                                      ): Migration[A, B] =
     a => bGen.from(inter.apply(aGen.to(a)))
 
-  type SqlIdentifierPredicate = MatchesRegex[W.`"[A-Za-z][A-Za-z0-9_]{0,63}"`.T]
+  type SqlIdentifierPredicate = MatchesRegex[W.`"^[A-Za-z][A-Za-z0-9_]*$"`.T] And Size[Interval.Closed[W.`1`.T, W.`64`.T]]
   type SqlIdentifier = String Refined SqlIdentifierPredicate
+  type MySqlUserPredicate = SqlIdentifierPredicate And Size[Interval.Closed[W.`1`.T, W.`32`.T]]
+  type MySqlUser = String Refined MySqlUserPredicate
   type GeneratedPasswordPredicate = MatchesRegex[W.`"""[-A-Za-z0-9!"#$%&()*+,./:<=>?@\\[\\]\\\\^_{|}~]+"""`.T]
   type GeneratedPassword = String Refined GeneratedPasswordPredicate
   implicit def coercibleDecoder[A, B](implicit ev: Coercible[Decoder[A], Decoder[B]], d: Decoder[A]): Decoder[B] = ev(d)
   implicit def coercibleEncoder[A, B](implicit ev: Coercible[Encoder[A], Encoder[B]], e: Encoder[A]): Encoder[B] = ev(e)
 
-  @newtype case class MasterDatabaseUsername(id: SqlIdentifier) {
+  @newtype case class MasterDatabaseUsername(id: MySqlUser) {
     def value: String = id.value
   }
   @newtype case class MasterDatabasePassword(value: String)
@@ -49,7 +51,7 @@ package object init {
   @newtype case class Host(value: String)
   @newtype case class Port(value: Int)
 
-  @newtype case class Username(id: SqlIdentifier) {
+  @newtype case class Username(id: MySqlUser) {
     def value: String = id.value
   }
   @newtype case class Password(id: GeneratedPassword) {
@@ -58,7 +60,7 @@ package object init {
   @newtype case class Database(id: SqlIdentifier) {
     def value: String = id.value
   }
-  @newtype case class RoleName(id: SqlIdentifier) {
+  @newtype case class RoleName(id: MySqlUser) {
     def value: String = id.value
   }
 }
