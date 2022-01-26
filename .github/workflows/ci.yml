@@ -20,15 +20,21 @@ jobs:
     name: Build and Test
     strategy:
       matrix:
-        os: [ubuntu-latest]
-        scala: [2.13.8]
-        java: [temurin@8, temurin@11]
+        os:
+          - ubuntu-latest
+        scala:
+          - 2.13.8
+        java:
+          - temurin@8
+          - temurin@11
+        database:
+          - mysql:8
     runs-on: ${{ matrix.os }}
     env:
       LOG_LEVEL: info
     services:
       mysql:
-        image: mysql
+        image: ${{ matrix.database }}
         env:
           MYSQL_ROOT_PASSWORD: password
         ports:
