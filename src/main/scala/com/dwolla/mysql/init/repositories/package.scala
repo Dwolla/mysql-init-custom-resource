@@ -11,6 +11,12 @@ import doobie.free.connection
 import org.typelevel.log4cats.Logger
 
 package object repositories {
+  def quotedIdentifier(s: String): Fragment =
+    fr0"`" ++ Fragment.const0(s) ++ fr"`"
+
+  def quotedIdentifier0(s: String): Fragment =
+    fr0"`" ++ Fragment.const0(s) ++ fr0"`"
+
   implicit def freeLogger[F[_] : Logger](implicit dispatcher: Dispatcher[F]): Logger[ConnectionIO] =
     Logger[F].mapK(new (F ~> ConnectionIO) {
       override def apply[A](fa: F[A]): ConnectionIO[A] =
