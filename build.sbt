@@ -25,21 +25,22 @@ lazy val `mysql-init-custom-resource` = (project in file("."))
     topLevelDirectory := None,
     libraryDependencies ++= {
       val natchezVersion = "0.1.6"
-      val feralVersion = "0.1-cf71fa2-SNAPSHOT"
+      val feralVersion = "0.1.0-M5"
       val doobieVersion = "1.0.0-RC1"
       val munitVersion = "0.7.29"
       val circeVersion = "0.14.1"
       val scalacheckEffectVersion = "1.0.3"
       val log4catsVersion = "2.2.0"
       val monocleVersion = "2.1.0"
-      val http4sVersion = "0.23.7"
-      val awsSdkVersion = "2.17.112"
+      val http4sVersion = "0.23.8"
+      val awsSdkVersion = "2.17.118"
+      val refinedV = "0.9.28"
 
       Seq(
         "org.typelevel" %% "feral-lambda-cloudformation-custom-resource" % feralVersion,
         "org.tpolecat" %% "natchez-noop" % natchezVersion,
         "org.tpolecat" %% "natchez-xray" % natchezVersion,
-        "org.tpolecat" %% "natchez-http4s" % "0.2.0",
+        "org.tpolecat" %% "natchez-http4s" % "0.3.2",
         "org.typelevel" %% "cats-tagless-macros" % "0.14.0",
         "org.http4s" %% "http4s-ember-client" % http4sVersion,
         "io.circe" %% "circe-parser" % circeVersion,
@@ -70,10 +71,13 @@ lazy val `mysql-init-custom-resource` = (project in file("."))
         "org.http4s" %% "http4s-dsl" % http4sVersion % Test,
         "com.eed3si9n.expecty" %% "expecty" % "0.15.4" % Test,
         "software.amazon.awssdk" % "sts" % awsSdkVersion % Test,
+        "eu.timepit" %% "refined-scalacheck" % refinedV % Test
       )
     },
+    addBuildInfoToConfig(Test),
+    Test / testOptions ++= (Test / shouldRunIntegrationTests).value.testArguments,
   )
-  .enablePlugins(UniversalPlugin, JavaAppPackaging)
+  .enablePlugins(UniversalPlugin, JavaAppPackaging, IntegrationTestsPlugin, BuildInfoPlugin)
 
 lazy val serverlessDeployCommand = settingKey[Seq[String]]("serverless command to deploy the application")
 serverlessDeployCommand := "serverless deploy --verbose".split(' ').toSeq

@@ -2,10 +2,13 @@ package com.dwolla.mysql.init
 
 import cats._
 import cats.syntax.all._
+import eu.timepit.refined.api.{Refined, Validate}
 import eu.timepit.refined.refineV
 import org.scalacheck.{Arbitrary, Gen, Shrink}
 
 trait ArbitraryRefinedTypes {
+  def refinedConst[A] = new PartiallyAppliedRefinedConst[A]
+
   implicit val shrinkSqlIdentifier: Shrink[SqlIdentifier] = Shrink.shrinkAny
   def genSqlIdentifier[F[_] : Applicative]: Gen[F[SqlIdentifier]] =
     for {
@@ -38,4 +41,11 @@ trait ArbitraryRefinedTypes {
     } yield refined.pure[F]
   }
   implicit val arbGeneratedPassword: Arbitrary[GeneratedPassword] = Arbitrary(genGeneratedPassword[Id])
+}
+
+class PartiallyAppliedRefinedConst[A](private val unit: Unit = ()) extends AnyVal {
+  def apply[T, P](t: T)
+                 (implicit ev: Refined[T, P] =:= A,
+                  V: Validate[T, P]): Gen[Refined[T, P]] =
+    refineV[P](t).fold(_ |: Gen.fail, Gen.const)
 }

@@ -26,6 +26,8 @@ jobs:
         scala: [2.13.8]
         java: [temurin@8, temurin@11]
     runs-on: ${{ matrix.os }}
+    env:
+      LOG_LEVEL: info
     services:
       mysql:
         image: mysql

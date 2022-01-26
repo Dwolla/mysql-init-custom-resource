@@ -32,6 +32,7 @@ import org.scalacheck.{Arbitrary, Gen}
 import org.typelevel.jawn.Parser
 import org.typelevel.log4cats.Logger
 import _root_.io.circe.optics.JsonPath._
+import com.dwolla.testutils.IntegrationTest
 
 import scala.concurrent.duration._
 
@@ -61,8 +62,8 @@ class RoundTripIntegrationTest
   private val genUserConnectionInfo: Option[Database] => Gen[UserConnectionInfo] = maybeDatabase =>
     for {
       database <- maybeDatabase.fold(arbitrary[SqlIdentifier].map(Database(_)))(Gen.const)
-      host <- Gen.const(Host("localhost"))
-      port <- Gen.const(Port(3306))
+      host <- Gen.const(Host(BuildInfo.test_databaseAddress))
+      port <- Gen.const(Port(BuildInfo.test_databasePort.toInt))
       user <- arbitrary[MySqlUser].map(Username(_))
       password <- arbitrary[GeneratedPassword].map(Password(_))
     } yield UserConnectionInfo(database, host, port, user, password)
@@ -70,11 +71,11 @@ class RoundTripIntegrationTest
   private def genDatabaseMetadata[F[_] : Monad, A : Encoder](secretsAlg: SecretsManagerAlg[F],
                                                              genA: Option[Database] => Gen[A]): Gen[Resource[F, DatabaseMetadata]] = {
     for {
-      host <- Gen.const(Host("localhost"))
-      port <- Gen.const(Port(3306))
+      host <- Gen.const(Host(BuildInfo.test_databaseAddress))
+      port <- Gen.const(Port(BuildInfo.test_databasePort.toInt))
       database <- arbitrary[SqlIdentifier].map(Database(_))
-      username <- Gen.const[MySqlUser]("root").map(MasterDatabaseUsername(_))
-      password <- Gen.const("password").map(MasterDatabasePassword(_))
+      username <- refinedConst[MySqlUser](BuildInfo.test_databaseUser).map(MasterDatabaseUsername(_))
+      password <- Gen.const(BuildInfo.test_databasePassword).map(MasterDatabasePassword(_))
       secrets <- {
         implicit val arbA: Arbitrary[A] = Arbitrary(genA(database.some))
         implicit val arbSecret: Arbitrary[Resource[F, SecretId]] = Arbitrary(genSecret[F, A](secretsAlg))
@@ -116,7 +117,7 @@ class RoundTripIntegrationTest
 
   private def requestTypeLens[T]: Lens[CloudFormationCustomResourceRequest[T], CloudFormationRequestType] = GenLens[CloudFormationCustomResourceRequest[T]](_.RequestType)
 
-  test("Handler can create and destroy a database with users") {
+  test("Handler can create and destroy a database with users".tag(IntegrationTest)) {
     implicit val arbDatabaseMetadata: Arbitrary[Resource[IO, DatabaseMetadata]] = Arbitrary(genDatabaseMetadata[IO, UserConnectionInfo](secretsManagerAlg(), genUserConnectionInfo))
     implicit val arbReq: Arbitrary[Resource[IO, CloudFormationCustomResourceRequest[DatabaseMetadata]]] = Arbitrary(genWrappedCloudFormationCustomResourceRequest[Resource[IO, *], DatabaseMetadata])
 
