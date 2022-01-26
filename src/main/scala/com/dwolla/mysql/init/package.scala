@@ -33,9 +33,15 @@ package object init {
                                                                      ): Migration[A, B] =
     a => bGen.from(inter.apply(aGen.to(a)))
 
-  type SqlIdentifierPredicate = MatchesRegex[W.`"^[A-Za-z][A-Za-z0-9_]*$"`.T] And Size[Interval.Closed[W.`1`.T, W.`64`.T]]
+  type IdentifierCharacterPredicate = MatchesRegex[W.`"^[A-Za-z][A-Za-z0-9_]*$"`.T]
+  /**
+   * The actual maximum length of a Database Name in MySQL is 64 characters, but we use the database name
+   * to form the role name too, by appending `_role` to the end of the database name. That means the
+   * combined database name and role suffix need to be less than or equal to 32 characters.
+   */
+  type SqlIdentifierPredicate = IdentifierCharacterPredicate And Size[Interval.Closed[W.`1`.T, W.`27`.T]]
   type SqlIdentifier = String Refined SqlIdentifierPredicate
-  type MySqlUserPredicate = SqlIdentifierPredicate And Size[Interval.Closed[W.`1`.T, W.`32`.T]]
+  type MySqlUserPredicate = IdentifierCharacterPredicate And Size[Interval.Closed[W.`1`.T, W.`32`.T]]
   type MySqlUser = String Refined MySqlUserPredicate
   type GeneratedPasswordPredicate = MatchesRegex[W.`"""[-A-Za-z0-9!"#$%&()*+,./:<=>?@\\[\\]\\\\^_{|}~]+"""`.T]
   type GeneratedPassword = String Refined GeneratedPasswordPredicate

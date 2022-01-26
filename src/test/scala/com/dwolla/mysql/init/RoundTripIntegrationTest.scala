@@ -103,7 +103,7 @@ class RoundTripIntegrationTest
           .secretIds
           .traverse(secretsManagerAlg().getSecret(_).flatMap(parser.parse(_).liftTo[IO]))
           .map { secrets =>
-            req
+            req.applyLens(requestTypeLens).set(CloudFormationRequestType.OtherRequestType("template"))
               .asJson
               .mapObject(_.add("Materialized Secrets (this key is synthetic and not part of the AWS protocol)", secrets.asJson))
               .spaces2

@@ -10,7 +10,7 @@ trait ArbitraryRefinedTypes {
   def genSqlIdentifier[F[_] : Applicative]: Gen[F[SqlIdentifier]] =
     for {
       initial <- Gen.alphaChar
-      len <- Gen.chooseNum(0, 63)
+      len <- Gen.chooseNum(0, 27) // see comment on SqlIdentifier
       tail <- Gen.stringOfN(len, Gen.oneOf(Gen.alphaChar, Gen.numChar, Gen.const('_')))
       refined <- refineV[SqlIdentifierPredicate](s"$initial$tail").fold(_ => Gen.fail, Gen.const)
     } yield refined.pure[F]

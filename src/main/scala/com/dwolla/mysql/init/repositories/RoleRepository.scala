@@ -1,13 +1,14 @@
 package com.dwolla.mysql.init
 package repositories
 
+import cats.ApplicativeThrow
 import cats.effect.std.Dispatcher
 import cats.syntax.all._
 import cats.tagless.Derive
 import cats.tagless.aop.Instrument
 import doobie._
 import doobie.implicits._
-import eu.timepit.refined.api.Refined
+import eu.timepit.refined.refineV
 import org.typelevel.log4cats.Logger
 
 trait RoleRepository[F[_]] {
@@ -20,16 +21,18 @@ trait RoleRepository[F[_]] {
 object RoleRepository {
   implicit val RoleRepositoryInstrument: Instrument[RoleRepository] = Derive.instrument
 
-  def roleNameForDatabase(database: Database): RoleName =
-    RoleName(Refined.unsafeApply(database.value + "_role"))
+  def roleNameForDatabase[F[_] : ApplicativeThrow](database: Database): F[RoleName] =
+    refineV[MySqlUserPredicate](database.value + "_role")
+      .map(RoleName(_))
+      .leftMap(new RuntimeException(_))
+      .liftTo[F]
 
   def apply[F[_] : Logger : Dispatcher]: RoleRepository[ConnectionIO] = new RoleRepository[ConnectionIO] {
-    override def createRole(database: Database): ConnectionIO[Unit] = {
-      val role = roleNameForDatabase(database)
-
-      checkRoleExists(role)
-        .ifM(createEmptyRole(role) >> grantPrivileges(role, database), Logger[ConnectionIO].info(s"No-op: role $role already exists"))
-    }
+    override def createRole(database: Database): ConnectionIO[Unit] =
+      roleNameForDatabase[ConnectionIO](database).flatMap { role =>
+        checkRoleExists(role)
+          .ifM(createEmptyRole(role) >> grantPrivileges(role, database), Logger[ConnectionIO].info(s"No-op: role $role already exists"))
+      }
 
     private def checkRoleExists(role: RoleName): ConnectionIO[Boolean] =
       RoleQueries.countRoleByName(role)
@@ -64,11 +67,11 @@ object RoleRepository {
         .void
         .recoverUndefinedAs(())
 
-    override def removeRole(database: Database): ConnectionIO[Unit] = {
-      val roleName = roleNameForDatabase(database)
+    override def removeRole(database: Database): ConnectionIO[Unit] =
+      roleNameForDatabase[ConnectionIO](database).flatMap { roleName =>
 
-      revokePrivileges(roleName, database) >> dropRole(roleName)
-    }
+        revokePrivileges(roleName, database) >> dropRole(roleName)
+      }
 
     private def dropRole(roleName: RoleName): ConnectionIO[Unit] =
       RoleQueries.dropRole(roleName)
@@ -80,21 +83,25 @@ object RoleRepository {
         .recoverUndefinedAs(())
 
     override def addUserToRole(username: Username, database: Database): ConnectionIO[Unit] =
-      RoleQueries.grantRole(username, roleNameForDatabase(database))
-        .run
-        .flatTap { completion =>
-          Logger[ConnectionIO].info(s"added $username to role ${roleNameForDatabase(database)} with status $completion")
-        }
-        .void
+      roleNameForDatabase[ConnectionIO](database).flatMap { role =>
+        RoleQueries.grantRole(username, role)
+          .run
+          .flatTap { completion =>
+            Logger[ConnectionIO].info(s"added $username to role $role with status $completion")
+          }
+          .void
+      }
 
     override def removeUserFromRole(username: Username, database: Database): ConnectionIO[Unit] =
-      RoleQueries.revokeRole(username, roleNameForDatabase(database))
-        .run
-        .flatTap { completion =>
-          Logger[ConnectionIO].info(s"revoked role ${roleNameForDatabase(database)} from $username with status $completion")
-        }
-        .void
-        .recoverUndefinedAs(())
+      roleNameForDatabase[ConnectionIO](database).flatMap { role =>
+        RoleQueries.revokeRole(username, role)
+          .run
+          .flatTap { completion =>
+            Logger[ConnectionIO].info(s"revoked role $role from $username with status $completion")
+          }
+          .void
+          .recoverUndefinedAs(())
+      }
   }
 }
 
