@@ -32,6 +32,7 @@ import org.scalacheck.{Arbitrary, Gen}
 import org.typelevel.jawn.Parser
 import org.typelevel.log4cats.Logger
 import _root_.io.circe.optics.JsonPath._
+import com.dwolla.mysql.init.repositories.ReservedWords
 import com.dwolla.testutils.IntegrationTest
 
 import scala.concurrent.duration._
@@ -135,7 +136,7 @@ class RoundTripIntegrationTest
       } yield (requestCapture, requestTemplate.applyLens(requestTypeLens).set(_), handler, secrets)
 
       r.use { case (requestCapture, requestTemplate, handler, secrets) =>
-        if (!containsDuplicateUsers(secrets))
+        if (!containsInputError(secrets))
           for {
             _ <- handler(LambdaEnv.pure(requestTemplate(CloudFormationRequestType.CreateRequest), TestContext[IO]))
             _ <- requestCapture.get.flatMap(expectNSuccessfulResponses(1))
@@ -145,16 +146,35 @@ class RoundTripIntegrationTest
         else
           for {
             _ <- handler(LambdaEnv.pure(requestTemplate(CloudFormationRequestType.CreateRequest), TestContext[IO]))
-            _ <- requestCapture.get.flatMap(expectDuplicateUsersError(_))
+            _ <- requestCapture.get.flatMap { req =>
+              expectDuplicateUsersError(req).whenA(containsDuplicateUsers(secrets)) >>
+                expectReservedIdentifiersError(req).whenA(containsReservedIdentifiers(secrets))
+            }
           } yield ()
       }
     }
   }
 
-  private def containsDuplicateUsers(secrets: List[UserConnectionInfo]): Boolean =
-    secrets.groupBy(_.user).values.exists(_.length > 1)
+  private def containsInputError(secrets: List[UserConnectionInfo]): Boolean =
+    List(
+      containsDuplicateUsers,
+      containsReservedIdentifiers,
+    ).foldMap(_(secrets))(Monoid.instance(false, _ || _))
 
-  def expectDuplicateUsersError(requests: CapturedRequests[IO]): IO[Unit] = IO {
+  private val containsReservedIdentifiers: List[UserConnectionInfo] => Boolean =
+    _.map(_.user.value).exists(ReservedWords.contains)
+
+  private val containsDuplicateUsers: List[UserConnectionInfo] => Boolean =
+    _.groupBy(_.user).values.exists(_.length > 1)
+
+  def expectDuplicateUsersError: CapturedRequests[IO] => IO[Unit] =
+    expectErrorMessageStartsWith("The specified secrets refer to users that share database and usernames. Deduplicate the input and try again.")
+
+  def expectReservedIdentifiersError: CapturedRequests[IO] => IO[Unit] =
+    expectErrorMessageStartsWith("The specified secrets refer to usernames that are MySQL reserved words. Change or remove those users from the input and try again.")
+
+  def expectErrorMessageStartsWith(msg: String)
+                                  (requests: CapturedRequests[IO]): IO[Unit] = IO {
     val requestInTuple = GenLens[(Request[IO], Json)](_._2)
     val findRequest = Optional[CapturedRequests[IO], (Request[IO], Json)](_.headOption)(t => l => t :: l.tail).composeLens(requestInTuple)
 
@@ -162,7 +182,7 @@ class RoundTripIntegrationTest
     val reason = root.Reason.as[String]
 
     expect((findRequest composeOptional status).getOption(requests) == Failed.some)
-    expect((reason compose findRequest).getOption(requests).exists(_.startsWith("The specified secrets refer to users that share database and usernames. Deduplicate the input and try again.")))
+    expect((reason compose findRequest).getOption(requests).exists(_.startsWith(msg)))
   }
 
   def expectNSuccessfulResponses(n: Int)

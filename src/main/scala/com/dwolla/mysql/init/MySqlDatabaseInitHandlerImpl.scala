@@ -5,6 +5,7 @@ import cats.data.{EitherNel, NonEmptyList}
 import cats.effect.std.Dispatcher
 import cats.effect.{Trace => _, _}
 import cats.syntax.all._
+import com.dwolla.mysql.init.InputValidationError.userList
 import com.dwolla.mysql.init.MySqlDatabaseInitHandlerImpl.databaseAsPhysicalResourceId
 import com.dwolla.mysql.init.aws.{ResourceNotFoundException, SecretsManagerAlg}
 import com.dwolla.mysql.init.repositories._
@@ -60,9 +61,11 @@ class MySqlDatabaseInitHandlerImpl[F[_] : Concurrent : Logger : TransactorFactor
     for {
       userPasswords <- input.secretIds.traverse(secretsManagerAlg.getSecretAs[UserConnectionInfo])
       _ <- List(
-          ensureDatabaseConnectionInfoMatches(userPasswords, input),
-          ensureNoDuplicateUsers(userPasswords),
+          ensureDatabaseConnectionInfoMatches(_, input),
+          ensureNoDuplicateUsers(_),
+          ensureNoIdentifiersAsReservedWords(_)
         )
+        .map(_(userPasswords))
         .parSequence
         .leftMap(InputValidationException(_))
         .liftTo[F]
@@ -101,6 +104,17 @@ class MySqlDatabaseInitHandlerImpl[F[_] : Concurrent : Logger : TransactorFactor
     else WrongDatabaseConnection(mismatches, db).leftNel
   }
 
+  private def ensureNoIdentifiersAsReservedWords(users: List[UserConnectionInfo]): EitherNel[InputValidationError, Unit] = {
+    val reservedIdentifiers =
+      users
+        .map(_.user)
+        .filter(u => ReservedWords.contains(u.value))
+
+    if (reservedIdentifiers.isEmpty) ().rightNel
+    else ReservedWordAsIdentifier(reservedIdentifiers).leftNel
+  }
+
+
   private def ensureNoDuplicateUsers(users: List[UserConnectionInfo]): EitherNel[InputValidationError, Unit] = {
     val duplicates: Iterable[Username] =
       users
@@ -119,6 +133,11 @@ sealed trait InputValidationError {
   val message: String
 }
 
+object InputValidationError {
+  def userList(users: Iterable[Username]): String =
+    users.mkString(" - ", "\n - ", "")
+}
+
 case class InputValidationException(errors: NonEmptyList[InputValidationError]) extends RuntimeException(
   errors.map(_.message).mkString_("\n")
 ) with NoStackTrace
@@ -130,14 +149,21 @@ case class WrongDatabaseConnection(users: List[Username], db: DatabaseMetadata) 
        |Expected database instance: mysql://${db.host}:${db.port}/${db.name}"
        |
        |Mismatched users:
-       |${users.mkString(" - ", "\n - ", "")}""".stripMargin
+       |${userList(users)}""".stripMargin
 }
 
 case class DuplicateUsers(users: Iterable[Username]) extends InputValidationError {
   val message: String =
     s"""The specified secrets refer to users that share database and usernames. Deduplicate the input and try again.
        |
-       |${users.mkString(" - ", "\n - ", "")}""".stripMargin
+       |${userList(users)}""".stripMargin
+}
+
+case class ReservedWordAsIdentifier(users: List[Username]) extends InputValidationError {
+  override val message: String =
+    s"""The specified secrets refer to usernames that are MySQL reserved words. Change or remove those users from the input and try again.
+       |
+       |${userList(users)}""".stripMargin
 }
 
 object MySqlDatabaseInitHandlerImpl {
