@@ -36,7 +36,8 @@ trait ArbitraryRefinedTypes {
 
     for {
       initial <- allowedCharacters
-      tail <- Gen.stringOf(allowedCharacters)
+      length <- Gen.chooseNum(0, 255) // max length 256 (255 + initial character)
+      tail <- Gen.stringOfN(length, allowedCharacters)
       refined <- refineV[GeneratedPasswordPredicate](s"$initial$tail").fold(_ => Gen.fail, Gen.const)
     } yield refined.pure[F]
   }

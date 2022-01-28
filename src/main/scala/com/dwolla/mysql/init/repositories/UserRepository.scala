@@ -55,17 +55,20 @@ object UserQueries {
   def createUser(username: Username,
                  password: Password)
                 (implicit logHandler: LogHandler): Update0 =
-    (fr"CREATE USER" ++ quotedIdentifier(username.value) ++ fr"IDENTIFIED BY '" ++ Fragment.const(password.value) ++ fr"'")
+    (fr"CREATE USER" ++ quotedIdentifier(username.value) ++ fr"IDENTIFIED BY" ++ quotedPassword(password))
       .update
 
   def updateUser(username: Username,
                  password: Password)
                 (implicit logHandler: LogHandler): Update0 =
-    (fr"ALTER USER" ++ quotedIdentifier(username.value) ++ fr"IDENTIFIED BY '" ++ Fragment.const(password.value) ++ fr"'")
+    (fr"ALTER USER" ++ quotedIdentifier(username.value) ++ fr"IDENTIFIED BY" ++ quotedPassword(password))
       .update
 
   def removeUser(username: Username)
                 (implicit logHandler: LogHandler): Update0 =
     (fr"DROP USER IF EXISTS" ++ quotedIdentifier(username.value))
       .update
+
+  private def quotedPassword(password: Password): Fragment =
+    fr0"'" ++ Fragment.const0(password.value) ++ fr"'"
 }
