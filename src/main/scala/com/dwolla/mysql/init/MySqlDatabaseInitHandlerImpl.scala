@@ -17,7 +17,8 @@ import org.typelevel.log4cats.Logger
 import retry._
 import retry.RetryDetails._
 
-import scala.concurrent.duration.{DurationInt}
+import scala.concurrent.duration.DurationInt
+import scala.util.control.NoStackTrace
 
 class MySqlDatabaseInitHandlerImpl[F[_] : Sleep : Concurrent : Logger : TransactorFactory](secretsManagerAlg: SecretsManagerAlg[F],
                                                                                    databaseRepository: DatabaseRepository[ConnectionIO],
@@ -30,22 +31,21 @@ class MySqlDatabaseInitHandlerImpl[F[_] : Sleep : Concurrent : Logger : Transact
   override def updateResource(event: DatabaseMetadata): F[HandlerResponse[INothing]] =
     handleCreateOrUpdate(event)(createOrUpdate(_, event)).map(HandlerResponse(_, None))
 
-  def logError(user: Username)(err: Throwable, details: RetryDetails): F[Unit] = details match {
+  def logError(err: Throwable, details: RetryDetails): F[Unit] = details match {
 
     case WillDelayAndRetry(_, _, _) =>
-      Logger[F].warn(err)(s"Failed when removing $user; retrying")
+      Logger[F].warn(err)(s"Failed when removing user; retrying")
       Sleep[F].sleep(5.seconds)
 
     case GivingUp(totalRetries: Int, _) =>
       Logger[F].error(err)(s"Failed when removing user after $totalRetries retries")
-      DependentObjectsStillExistButRetriesAreExhausted(user.value, err).raiseError[F, Unit]
+      DependentObjectsStillExistButRetriesAreExhausted(err).raiseError[F, Unit]
   }
 
   override def deleteResource(event: DatabaseMetadata): F[HandlerResponse[INothing]] =
     for {
       usernames <- getUsernamesFromSecrets(event.secretIds, UserRepository.usernameForDatabase(event.name))
-      dbId <- retryingOnAllErrors[PhysicalResourceId](RetryPolicies.limitRetries[F](5), onError = logError(usernames.head))(removeUsersFromDatabase(usernames, event.name).transact(TransactorFactory[F].buildTransactor(event)))
-
+      dbId <- retryingOnAllErrors[PhysicalResourceId](RetryPolicies.limitRetries[F](5), onError = logError)(removeUsersFromDatabase(usernames, event.name).transact(TransactorFactory[F].buildTransactor(event)))
     } yield HandlerResponse(dbId, None)
 
   private def createOrUpdate(userPasswords: List[UserConnectionInfo], input: DatabaseMetadata): ConnectionIO[PhysicalResourceId] =
@@ -69,7 +69,7 @@ class MySqlDatabaseInitHandlerImpl[F[_] : Sleep : Concurrent : Logger : Transact
         )
         .map(_(userPasswords))
         .parSequence
-        .leftMap(InputValidationException(_))
+        .leftMap(InputValidationException)
         .liftTo[F]
       id <- f(userPasswords).transact(TransactorFactory[F].buildTransactor(input))
     } yield id
@@ -169,7 +169,7 @@ case class ReservedWordAsIdentifier(users: List[Username]) extends InputValidati
 }
 
 object MySqlDatabaseInitHandlerImpl {
-  def apply[F[_] : Concurrent : Sleep : Logger : Dispatcher : TransactorFactory](secretsManager: SecretsManagerAlg[F]): MySqlDatabaseInitHandlerImpl[F] =
+  def apply[F[_] : Concurrent : Sleep : Logger : Dispatcher : TransactorFactory](secretsManager: SecretsManagerAlg[F])(implicit logHandler: LogHandler): MySqlDatabaseInitHandlerImpl[F] =
     new MySqlDatabaseInitHandlerImpl(
       secretsManager,
       DatabaseRepository[F],
