@@ -34,6 +34,7 @@ import org.typelevel.log4cats.Logger
 import _root_.io.circe.optics.JsonPath._
 import com.dwolla.mysql.init.repositories.ReservedWords
 import com.dwolla.testutils.IntegrationTest
+import doobie.LogHandler
 
 import scala.concurrent.duration._
 
@@ -117,6 +118,11 @@ class RoundTripIntegrationTest
   override def munitFixtures = List(secretsManagerAlg)
 
   private def requestTypeLens[T]: Lens[CloudFormationCustomResourceRequest[T], CloudFormationRequestType] = GenLens[CloudFormationCustomResourceRequest[T]](_.RequestType)
+
+  private val logger = org.slf4j.LoggerFactory.getLogger("Repositories")
+  private implicit val logHandler: LogHandler = LogHandler { event =>
+    logger.info(s"🔮 ${AnsiColorCodes.red}${event.sql}${AnsiColorCodes.reset}")
+  }
 
   test("Handler can create and destroy a database with users".tag(IntegrationTest)) {
     implicit val arbDatabaseMetadata: Arbitrary[Resource[IO, DatabaseMetadata]] = Arbitrary(genDatabaseMetadata[IO, UserConnectionInfo](secretsManagerAlg(), genUserConnectionInfo))
@@ -230,4 +236,9 @@ class FakeSecretsManagerAlg[F[_] : MonadThrow](secrets: Ref[F, Map[SecretId, Str
 
   override def deleteSecret(id: SecretId, deletionTimeFrame: SecretDeletionRecoveryTime): F[Unit] =
     secrets.update(_ - id)
+}
+
+object AnsiColorCodes {
+  val red = "\u001b[31m"
+  val reset = "\u001b[0m"
 }

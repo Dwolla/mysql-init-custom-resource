@@ -6,6 +6,7 @@ import cats.effect.{Trace => _, _}
 import cats.tagless.FunctorK.ops.toAllFunctorKOps
 import com.dwolla.mysql.init.aws.SecretsManagerAlg
 import com.dwolla.tracing._
+import doobie.util.log.LogHandler
 import feral.lambda.cloudformation._
 import feral.lambda.{INothing, IOLambda, KernelSource, LambdaEnv, TracedHandler}
 import natchez._
@@ -22,7 +23,7 @@ class MySqlDatabaseInitHandler extends IOLambda[CloudFormationCustomResourceRequ
     new MySqlDatabaseInitHandlerF[IO].handler
 }
 
-class MySqlDatabaseInitHandlerF[F[_] : Async] {
+class MySqlDatabaseInitHandlerF[F[_] : Async](implicit logHandler: LogHandler = LogHandler.nop) {
   def handler: Resource[F, LambdaEnv[F, CloudFormationCustomResourceRequest[DatabaseMetadata]] => F[Option[INothing]]] =
     for {
       implicit0(logger: Logger[F]) <- Resource.eval(Slf4jLogger.create[F])

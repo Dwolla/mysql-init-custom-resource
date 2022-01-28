@@ -21,7 +21,7 @@ object UserRepository {
   def usernameForDatabase(database: Database): Username =
     Username(Refined.unsafeApply(database.value))
 
-  def apply[F[_] : Logger : Dispatcher]: UserRepository[ConnectionIO] = new UserRepository[ConnectionIO] {
+  def apply[F[_] : Logger : Dispatcher](implicit logHandler: LogHandler): UserRepository[ConnectionIO] = new UserRepository[ConnectionIO] {
     override def addOrUpdateUser(userConnectionInfo: UserConnectionInfo): ConnectionIO[Username] =
       UserQueries.checkUserExists(userConnectionInfo.user)
         .unique
@@ -47,21 +47,31 @@ object UserRepository {
 
 object UserQueries {
   // I think SELECT EXISTS(SELECT 1 FROM mysql.user WHERE user = ${username.value}") is more efficient but not sure it matters
-  def checkUserExists(username: Username): Query0[Long] =
+  def checkUserExists(username: Username)
+                     (implicit logHandler: LogHandler): Query0[Long] =
     sql"SELECT count(*) as count FROM mysql.user WHERE user = ${username.value}"
       .query[Long]
 
   def createUser(username: Username,
-                 password: Password): Update0 =
-    (fr"CREATE USER" ++ quotedIdentifier(username.value) ++ fr"IDENTIFIED BY '" ++ Fragment.const(password.value) ++ fr"'")
+                 password: Password)
+                (implicit logHandler: LogHandler): Update0 =
+    (fr"CREATE USER" ++ quotedIdentifier(username.value) ++ fr"IDENTIFIED BY" ++ quotedPassword(password))
       .update
 
   def updateUser(username: Username,
-                 password: Password): Update0 =
-    (fr"ALTER USER" ++ quotedIdentifier(username.value) ++ fr"IDENTIFIED BY '" ++ Fragment.const(password.value) ++ fr"'")
+                 password: Password)
+                (implicit logHandler: LogHandler): Update0 =
+    (fr"ALTER USER" ++ quotedIdentifier(username.value) ++ fr"IDENTIFIED BY" ++ quotedPassword(password))
       .update
 
-  def removeUser(username: Username): Update0 =
+  def removeUser(username: Username)
+                (implicit logHandler: LogHandler): Update0 =
     (fr"DROP USER IF EXISTS" ++ quotedIdentifier(username.value))
       .update
+
+  private def quotedPassword(password: Password): Fragment =
+    fr0"'" ++ Fragment.const0(escapeBackslashes(password.value)) ++ fr"'"
+
+  private def escapeBackslashes(s: String): String =
+    s.replace("""\""", """\\""")
 }

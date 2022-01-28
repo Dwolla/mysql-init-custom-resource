@@ -27,7 +27,7 @@ object RoleRepository {
       .leftMap(new RuntimeException(_))
       .liftTo[F]
 
-  def apply[F[_] : Logger : Dispatcher]: RoleRepository[ConnectionIO] = new RoleRepository[ConnectionIO] {
+  def apply[F[_] : Logger : Dispatcher](implicit logHandler: LogHandler): RoleRepository[ConnectionIO] = new RoleRepository[ConnectionIO] {
     override def createRole(database: Database): ConnectionIO[Unit] =
       roleNameForDatabase[ConnectionIO](database).flatMap { role =>
         checkRoleExists(role)
@@ -107,34 +107,43 @@ object RoleRepository {
 
 object RoleQueries {
   def grantRole(userName: Username,
-                role: RoleName): Update0 =
+                role: RoleName)
+               (implicit logHandler: LogHandler): Update0 =
     (fr"GRANT" ++ Fragment.const(role.value) ++ fr"TO" ++ Fragment.const(userName.value))
       .update
 
   def revokeRole(userName: Username,
-                 role: RoleName): Update0 =
+                 role: RoleName)
+                (implicit logHandler: LogHandler): Update0 =
     (fr"REVOKE" ++ Fragment.const(role.value) ++ fr"FROM" ++ Fragment.const(userName.value))
       .update
 
   // Pretty sure roles and users are stored in the same table
-  def countRoleByName(roleName: RoleName): Query0[Long] =
+  def countRoleByName(roleName: RoleName)
+                     (implicit logHandler: LogHandler): Query0[Long] =
     sql"SELECT count(*) as count FROM mysql.user WHERE user = ${roleName.value}"
       .query[Long]
 
-  def createRole(role: RoleName): Update0 =
+  def createRole(role: RoleName)
+                (implicit logHandler: LogHandler): Update0 =
     (fr"CREATE ROLE" ++ Fragment.const(role.value))
       .update
 
   // I think we need to run FLUSH PRIVILEGES to save these changes without restarting mysql
-  def grantPrivilegesToRole(database: Database, role: RoleName): Update0 =
+  def grantPrivilegesToRole(database: Database,
+                            role: RoleName)
+                           (implicit logHandler: LogHandler): Update0 =
     (fr"GRANT ALL PRIVILEGES ON" ++ quotedIdentifier0(database.value) ++ fr".* TO" ++ Fragment.const(role.value))
       .update
 
-  def revokePrivilegesFromRole(database: Database, role: RoleName): Update0 =
+  def revokePrivilegesFromRole(database: Database,
+                               role: RoleName)
+                              (implicit logHandler: LogHandler): Update0 =
     (fr"REVOKE ALL PRIVILEGES ON" ++ quotedIdentifier0(database.value) ++ fr".* FROM" ++ Fragment.const(role.value))
       .update
 
-  def dropRole(role: RoleName): Update0 =
+  def dropRole(role: RoleName)
+              (implicit logHandler: LogHandler): Update0 =
     (fr"DROP ROLE IF EXISTS" ++ Fragment.const(role.value))
       .update
 
