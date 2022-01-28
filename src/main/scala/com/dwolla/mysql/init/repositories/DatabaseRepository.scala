@@ -18,7 +18,7 @@ trait DatabaseRepository[F[_]] {
 object DatabaseRepository {
   implicit val DatabaseRepositoryInstrument: Instrument[DatabaseRepository] = Derive.instrument
 
-  def apply[F[_] : Logger : Dispatcher]: DatabaseRepository[ConnectionIO] = new DatabaseRepository[ConnectionIO] {
+  def apply[F[_] : Logger : Dispatcher](implicit logHandler: LogHandler): DatabaseRepository[ConnectionIO] = new DatabaseRepository[ConnectionIO] {
     override def createDatabase(db: DatabaseMetadata): ConnectionIO[Database] =
       checkDatabaseExists(db)
         .ifM(createDatabase(db.name), Logger[ConnectionIO].info(s"No-op: database ${db.name} already exists"))
@@ -52,16 +52,19 @@ object DatabaseRepository {
 }
 
 object DatabaseQueries {
-  def checkDatabaseExists(db: Database): Query0[Long] =
+  def checkDatabaseExists(db: Database)
+                         (implicit logHandler: LogHandler): Query0[Long] =
     sql"SELECT count(*) as count FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = ${db.id.value}"
       .query[Long]
 
   // I don't think mysql has the concept of owners; access to the db is through roles/privileges alone
-  def createDatabase(database: Database): Update0 =
+  def createDatabase(database: Database)
+                    (implicit logHandler: LogHandler): Update0 =
     (fr"CREATE DATABASE" ++ quotedIdentifier(database.value))
       .update
 
-  def dropDatabase(database: Database): Update0 =
+  def dropDatabase(database: Database)
+                  (implicit logHandler: LogHandler): Update0 =
     (fr"DROP DATABASE IF EXISTS" ++ quotedIdentifier(database.value))
       .update
 }

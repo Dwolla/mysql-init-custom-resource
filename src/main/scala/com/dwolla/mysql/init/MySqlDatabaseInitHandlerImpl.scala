@@ -167,7 +167,8 @@ case class ReservedWordAsIdentifier(users: List[Username]) extends InputValidati
 }
 
 object MySqlDatabaseInitHandlerImpl {
-  def apply[F[_] : Concurrent : Logger : Dispatcher : TransactorFactory](secretsManager: SecretsManagerAlg[F]): MySqlDatabaseInitHandlerImpl[F] =
+  def apply[F[_] : Concurrent : Logger : Dispatcher : TransactorFactory](secretsManager: SecretsManagerAlg[F])
+                                                                        (implicit logHandler: LogHandler): MySqlDatabaseInitHandlerImpl[F] =
     new MySqlDatabaseInitHandlerImpl(
       secretsManager,
       DatabaseRepository[F],
