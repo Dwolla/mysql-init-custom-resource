@@ -1,4 +1,5 @@
 service: mysql-init-custom-resource
+useDotenv: true
 
 provider:
   name: aws
@@ -25,7 +26,7 @@ provider:
             - "*"
   stackTags:
     Creator: serverless
-    Environment: ${env:STAGE}
+    Environment: ${opt:stage}
     Project: ${self:service}
     Team: platform
     Visibility: internal
@@ -50,9 +51,9 @@ resources:
     LambdaSg:
       Type: AWS::EC2::SecurityGroup
       Properties:
-        GroupDescription: Traffic source security group for ${env:STAGE} mysql-init-lambda
+        GroupDescription: Traffic source security group for ${opt:stage} mysql-init-lambda
         VpcId:
-          Fn::ImportValue: ${env:STAGE}VpcId
+          Fn::ImportValue: ${opt:stage}VpcId
         Tags:
           - Key: SecurityGroupType
             Value: TrafficSource
@@ -63,10 +64,10 @@ resources:
       Value:
         'Fn::GetAtt': [InitMySqlDatabaseLambdaFunction, Arn]
       Export:
-        Name: ${self:service}:${env:STAGE}:InitMySqlDatabaseArn
+        Name: ${self:service}:${opt:stage}:InitMySqlDatabaseArn
     InitMySqlDatabaseSg:
       Description: Secrutiy group attached to database initialization Lambda Function
       Value:
         !GetAtt LambdaSg.GroupId
       Export:
-        Name: ${self:service}:${env:STAGE}:InitMySqlDatabaseSgId
+        Name: ${self:service}:${opt:stage}:InitMySqlDatabaseSgId
