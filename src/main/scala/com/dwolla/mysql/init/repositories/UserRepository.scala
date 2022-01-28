@@ -70,5 +70,8 @@ object UserQueries {
       .update
 
   private def quotedPassword(password: Password): Fragment =
-    fr0"'" ++ Fragment.const0(password.value) ++ fr"'"
+    fr0"'" ++ Fragment.const0(escapeBackslashes(password.value)) ++ fr"'"
+
+  private def escapeBackslashes(s: String): String =
+    s.replace("""\""", """\\""")
 }

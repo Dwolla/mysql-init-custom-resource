@@ -43,7 +43,8 @@ package object init {
   type SqlIdentifier = String Refined SqlIdentifierPredicate
   type MySqlUserPredicate = IdentifierCharacterPredicate And Size[Interval.Closed[W.`1`.T, W.`32`.T]]
   type MySqlUser = String Refined MySqlUserPredicate
-  type GeneratedPasswordPredicate = MatchesRegex[W.`"""[-A-Za-z0-9!"#$%&()*+,./:<=>?@\\[\\]\\\\^_{|}~]+"""`.T]
+  val GeneratedPasswordRegex = """^[-A-Za-z0-9!"#$%&()*+,./:<=>?@\[\]\\^_{|}~]+$"""
+  type GeneratedPasswordPredicate = MatchesRegex[GeneratedPasswordRegex.type] And Size[Interval.Closed[W.`1`.T, W.`256`.T]]
   type GeneratedPassword = String Refined GeneratedPasswordPredicate
   implicit def coercibleDecoder[A, B](implicit ev: Coercible[Decoder[A], Decoder[B]], d: Decoder[A]): Decoder[B] = ev(d)
   implicit def coercibleEncoder[A, B](implicit ev: Coercible[Encoder[A], Encoder[B]], e: Encoder[A]): Encoder[B] = ev(e)
