@@ -77,22 +77,10 @@ lazy val `mysql-init-custom-resource` = (project in file("."))
     addBuildInfoToConfig(Test),
     Test / testOptions ++= (Test / shouldRunIntegrationTests).value.testArguments,
   )
-  .enablePlugins(UniversalPlugin, JavaAppPackaging, IntegrationTestsPlugin, BuildInfoPlugin)
-
-lazy val serverlessDeployCommand = settingKey[Seq[String]]("serverless command to deploy the application")
-serverlessDeployCommand := "serverless deploy --verbose".split(' ').toSeq
-
-lazy val deploy = inputKey[Int]("deploy to AWS")
-deploy := Def.inputTask {
-  import scala.sys.process._
-
-  val baseCommand = serverlessDeployCommand.value
-  val exitCode = Process(
-    baseCommand ++ Seq("--stage", Stage.parser.parsed.name),
-    Option((`mysql-init-custom-resource` / baseDirectory).value),
-    "DATABASE_ARTIFACT_PATH" -> (`mysql-init-custom-resource` / Universal / packageBin).value.toString,
-  ).!
-
-  if (exitCode == 0) exitCode
-  else throw new IllegalStateException("Serverless returned a non-zero exit code. Please check the logs for more information.")
-}.evaluated
+  .enablePlugins(
+    UniversalPlugin,
+    JavaAppPackaging,
+    IntegrationTestsPlugin,
+    BuildInfoPlugin,
+    ServerlessDeployPlugin,
+  )
