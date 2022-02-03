@@ -26,7 +26,7 @@ lazy val `mysql-init-custom-resource` = (project in file("."))
     libraryDependencies ++= {
       val natchezVersion = "0.1.6"
       val feralVersion = "0.1.0-M5"
-      val doobieVersion = "1.0.0-RC1"
+      val doobieVersion = "1.0.0-RC2"
       val munitVersion = "0.7.29"
       val circeVersion = "0.14.1"
       val scalacheckEffectVersion = "1.0.3"
@@ -57,8 +57,8 @@ lazy val `mysql-init-custom-resource` = (project in file("."))
         "org.tpolecat" %% "doobie-core" % doobieVersion,
         "org.tpolecat" %% "doobie-refined" % doobieVersion,
         "mysql" % "mysql-connector-java" % "8.0.28" % Runtime,
-        "com.ovoenergy" %% "natchez-extras-doobie" % "6.0.0",
-       "com.github.cb372" %% "cats-retry" % catsRetryVersion,
+        "com.ovoenergy" %% "natchez-extras-doobie" % "6.1.0",
+        "com.github.cb372" %% "cats-retry" % catsRetryVersion,
         "org.scalameta" %% "munit" % munitVersion % Test,
         "org.scalameta" %% "munit-scalacheck" % munitVersion % Test,
         "io.circe" %% "circe-literal" % circeVersion % Test,
