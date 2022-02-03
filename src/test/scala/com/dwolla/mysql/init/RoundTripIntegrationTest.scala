@@ -106,7 +106,8 @@ class RoundTripIntegrationTest
           .secretIds
           .traverse(secretsManagerAlg().getSecret(_).flatMap(parser.parse(_).liftTo[IO]))
           .map { secrets =>
-            req.applyLens(requestTypeLens).set(CloudFormationRequestType.OtherRequestType("template"))
+            req.applyLens(requestTypeLens)
+              .set(CloudFormationRequestType.OtherRequestType("template"))
               .asJson
               .mapObject(_.add("Materialized Secrets (this key is synthetic and not part of the AWS protocol)", secrets.asJson))
               .spaces2
@@ -118,6 +119,9 @@ class RoundTripIntegrationTest
   override def munitFixtures = List(secretsManagerAlg)
 
   private def requestTypeLens[T]: Lens[CloudFormationCustomResourceRequest[T], CloudFormationRequestType] = GenLens[CloudFormationCustomResourceRequest[T]](_.RequestType)
+  private val requestDatabaseName: Lens[CloudFormationCustomResourceRequest[DatabaseMetadata], Database] = GenLens[CloudFormationCustomResourceRequest[DatabaseMetadata]](_.ResourceProperties.name)
+  private def viaRequestTemplate[T]: Getter[CloudFormationRequestType => CloudFormationCustomResourceRequest[T], CloudFormationCustomResourceRequest[T]] = Getter(_(CloudFormationRequestType.OtherRequestType("n/a")))
+  private val databaseNameFromRequestTemplate = viaRequestTemplate.composeLens(requestDatabaseName)
 
   private val logger = org.slf4j.LoggerFactory.getLogger("Repositories")
   private implicit val logHandler: LogHandler = LogHandler { event =>
@@ -145,16 +149,23 @@ class RoundTripIntegrationTest
         if (!containsInputError(secrets))
           for {
             _ <- handler(LambdaEnv.pure(requestTemplate(CloudFormationRequestType.CreateRequest), TestContext[IO]))
-            _ <- requestCapture.get.flatMap(expectNSuccessfulResponses(1))
+            _ <- requestCapture.get.flatMap {
+              expectNSuccessfulResponses(1) |+| expectResponseContaining { resp =>
+                val name = databaseNameFromRequestTemplate.get(requestTemplate)
+                val respId = resp.PhysicalResourceId.map(_.value)
+
+                respId.contains(name.value)
+              }
+            }
             _ <- handler(LambdaEnv.pure(requestTemplate(CloudFormationRequestType.DeleteRequest), TestContext[IO]))
             _ <- requestCapture.get.flatMap(expectNSuccessfulResponses(2))
           } yield ()
         else
           for {
             _ <- handler(LambdaEnv.pure(requestTemplate(CloudFormationRequestType.CreateRequest), TestContext[IO]))
-            _ <- requestCapture.get.flatMap { req =>
-              expectDuplicateUsersError(req).whenA(containsDuplicateUsers(secrets)) >>
-                expectReservedIdentifiersError(req).whenA(containsReservedIdentifiers(secrets))
+            _ <- requestCapture.get.flatMap {
+              expectDuplicateUsersError.map(_.whenA(containsDuplicateUsers(secrets))) |+|
+                expectReservedIdentifiersError.map(_.whenA(containsReservedIdentifiers(secrets)))
             }
           } yield ()
       }
@@ -191,8 +202,11 @@ class RoundTripIntegrationTest
     expect((reason compose findRequest).getOption(requests).exists(_.startsWith(msg)))
   }
 
-  def expectNSuccessfulResponses(n: Int)
-                                (requests: CapturedRequests[IO]): IO[Unit] = IO {
+  def expectResponseContaining(f: CloudFormationCustomResourceResponse => Boolean): CapturedRequests[IO] => IO[Unit] = requests => IO {
+    expect(requests.separate._2.exists(_.as[CloudFormationCustomResourceResponse].map(f).getOrElse(false)))
+  }
+
+  def expectNSuccessfulResponses(n: Int): CapturedRequests[IO] => IO[Unit] = requests => IO {
     expect(requests.length == n)
     expect(requests.forall { case (_, json) => json.as[CloudFormationCustomResourceResponse].map(_.Status) == Right(Success) })
   }
