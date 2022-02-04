@@ -28,4 +28,5 @@ object GrantParser {
 case class Grant(value: String)
 object Grant {
   implicit val eqGrant: Eq[Grant] = Eq.instance { case (Grant(a), Grant(b)) => a.toUpperCase == b.toUpperCase }
+  implicit val showGrant: Show[Grant] = Show.fromToString
 }
