@@ -59,6 +59,7 @@ lazy val `mysql-init-custom-resource` = (project in file("."))
         "mysql" % "mysql-connector-java" % "8.0.28" % Runtime,
         "com.ovoenergy" %% "natchez-extras-doobie" % "6.1.0",
         "com.github.cb372" %% "cats-retry" % catsRetryVersion,
+        "org.typelevel" %% "cats-parse" % "0.3.6",
         "org.scalameta" %% "munit" % munitVersion % Test,
         "org.scalameta" %% "munit-scalacheck" % munitVersion % Test,
         "io.circe" %% "circe-literal" % circeVersion % Test,
