@@ -16,8 +16,9 @@ object GrantParser {
   private val commaSeparator = char(',') *> whitespace0
 
   val privileges: Parser[NonEmptyList[String]] =
-    (anyChar.repUntil(commaSeparator | on) <* commaSeparator.?)
-      .repUntil(on)
+    anyChar
+      .repUntil(commaSeparator | on)
+      .repSep(commaSeparator)
       .map(_.map(_.mkString_("")))
 
   val fullParser: Parser[NonEmptyList[String]] =
