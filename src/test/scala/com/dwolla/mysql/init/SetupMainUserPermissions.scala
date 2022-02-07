@@ -7,6 +7,7 @@ import cats.syntax.all._
 import doobie._
 import doobie.syntax.all._
 import org.typelevel.log4cats.Logger
+import eu.timepit.refined.auto._
 
 trait SetupMainUserPermissions[F[_]] {
   def makeDatabasePermissionsEmulateRds(user: MasterDatabaseUsername): F[Unit]

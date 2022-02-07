@@ -8,6 +8,7 @@ import cats.syntax.all._
 import doobie._
 import doobie.syntax.all._
 import org.typelevel.log4cats.Logger
+import eu.timepit.refined.auto._
 
 trait MainUserPermissions[F[_]] {
   def ensureMainUserHasGrantPermissions(user: MasterDatabaseUsername): F[Unit]
@@ -53,7 +54,12 @@ case class HasGrants(value: NonEmptyList[Grant]) extends Grants {
        |""".stripMargin
 }
 object Grants {
-  implicit val grantsSemigroup: Monoid[Grants] = Monoid.instance(NoGrants, {
+  implicit val eqGrants: Eq[Grants] = Eq.by {
+    case HasGrants(grants) => grants.toList
+    case NoGrants => List.empty
+  }
+
+  implicit val grantsMonoid: Monoid[Grants] = Monoid.instance(NoGrants, {
     case (HasGrants(a), HasGrants(b)) => HasGrants(a |+| b)
     case (a: HasGrants, NoGrants) => a
     case (NoGrants, a: HasGrants) => a
@@ -63,7 +69,8 @@ object Grants {
   implicit val getGrants: Get[Grants] = Get[String].temap {
     GrantParser.fullParser
       .parse(_)
-      .map { case (_, grants) => HasGrants(grants.map(Grant(_))) }
+      .map(_._2)
+      .map(HasGrants(_))
       .leftMap(_.toString)
   }
 }
