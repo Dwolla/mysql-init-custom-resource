@@ -32,9 +32,12 @@ import org.scalacheck.{Arbitrary, Gen}
 import org.typelevel.jawn.Parser
 import org.typelevel.log4cats.Logger
 import _root_.io.circe.optics.JsonPath._
-import com.dwolla.mysql.init.repositories.ReservedWords
+import cats.effect.std.Dispatcher
+import com.dwolla.mysql.init.repositories.{ReservedWords, SetupMainUserPermissions}
 import com.dwolla.testutils.IntegrationTest
-import doobie.LogHandler
+import doobie._
+import doobie.syntax.all._
+import org.typelevel.log4cats.slf4j.Slf4jLogger
 
 import scala.concurrent.duration._
 
@@ -119,56 +122,73 @@ class RoundTripIntegrationTest
   override def munitFixtures = List(secretsManagerAlg)
 
   private def requestTypeLens[T]: Lens[CloudFormationCustomResourceRequest[T], CloudFormationRequestType] = GenLens[CloudFormationCustomResourceRequest[T]](_.RequestType)
-  private val requestDatabaseName: Lens[CloudFormationCustomResourceRequest[DatabaseMetadata], Database] = GenLens[CloudFormationCustomResourceRequest[DatabaseMetadata]](_.ResourceProperties.name)
+  private val requestDatabaseName: Lens[DatabaseMetadata, Database] = GenLens[DatabaseMetadata](_.name)
+  private val requestDatabaseMetadata: Lens[CloudFormationCustomResourceRequest[DatabaseMetadata], DatabaseMetadata] = GenLens[CloudFormationCustomResourceRequest[DatabaseMetadata]](_.ResourceProperties)
   private def viaRequestTemplate[T]: Getter[CloudFormationRequestType => CloudFormationCustomResourceRequest[T], CloudFormationCustomResourceRequest[T]] = Getter(_(CloudFormationRequestType.OtherRequestType("n/a")))
-  private val databaseNameFromRequestTemplate = viaRequestTemplate.composeLens(requestDatabaseName)
+  private val databaseMetadataFromRequestTemplate = viaRequestTemplate.composeLens(requestDatabaseMetadata)
+  private val databaseNameFromRequestTemplate = databaseMetadataFromRequestTemplate.composeLens(requestDatabaseName)
 
   private val logger = org.slf4j.LoggerFactory.getLogger("Repositories")
   private implicit val logHandler: LogHandler = LogHandler { event =>
     logger.info(s"🔮 ${AnsiColorCodes.red}${event.sql}${AnsiColorCodes.reset}")
   }
 
+  private def setupMainUserPermissions[F[_] : Async : Logger : Dispatcher](event: DatabaseMetadata,
+                                                                           resetInitialPermissions: Boolean): F[Unit] =
+    SetupMainUserPermissions[F]
+      .makeDatabasePermissionsEmulateRds(event.username)
+      .whenA(resetInitialPermissions)
+      .transact(TransactorFactory.instance[F].buildTransactor(event))
+      .handleErrorWith { ex =>
+        Logger[F].error(ex)("error occurred initializing the test") >> ex.raiseError[F, Unit]
+      }
+
   test("Handler can create and destroy a database with users".tag(IntegrationTest)) {
     implicit val arbDatabaseMetadata: Arbitrary[Resource[IO, DatabaseMetadata]] = Arbitrary(genDatabaseMetadata[IO, UserConnectionInfo](secretsManagerAlg(), genUserConnectionInfo))
     implicit val arbReq: Arbitrary[Resource[IO, CloudFormationCustomResourceRequest[DatabaseMetadata]]] = Arbitrary(genWrappedCloudFormationCustomResourceRequest[Resource[IO, *], DatabaseMetadata])
 
-    PropF.forAllF { input: Resource[IO, CloudFormationCustomResourceRequest[DatabaseMetadata]] =>
-      val r = for {
-        requestCapture <- Ref.in[Resource[IO, *], IO, CapturedRequests[IO]](List.empty)
-        client = FakeS3(requestCapture)
-        requestTemplate <- input
-        handler <- new MySqlDatabaseInitHandlerF[IO] {
-          override protected def httpClient: Resource[IO, Client[IO]] = client.pure[Resource[IO, *]]
-          override protected def secretsManagerResource(implicit L: Logger[IO]): Resource[IO, SecretsManagerAlg[Kleisli[IO, Span[IO], *]]] =
-            secretsManagerAlg().mapK(Kleisli.liftK[IO, Span[IO]]).pure[Resource[IO, *]]
-        }.handler
-        secrets <- Resource.eval(requestTemplate.ResourceProperties.secretIds.traverse(secretsManagerAlg().getSecretAs[UserConnectionInfo]))
-      } yield (requestCapture, requestTemplate.applyLens(requestTypeLens).set(_), handler, secrets)
+    PropF.forAllF { (input: Resource[IO, CloudFormationCustomResourceRequest[DatabaseMetadata]], resetInitialPermissions: Boolean) =>
+      val testResources =
+        for {
+          requestCapture <- Ref.in[Resource[IO, *], IO, CapturedRequests[IO]](List.empty)
+          client = FakeS3(requestCapture)
+          requestTemplate <- input
+          handler <- new MySqlDatabaseInitHandlerF[IO] {
+            override protected def httpClient: Resource[IO, Client[IO]] = client.pure[Resource[IO, *]]
+            override protected def secretsManagerResource(implicit L: Logger[IO]): Resource[IO, SecretsManagerAlg[Kleisli[IO, Span[IO], *]]] =
+              secretsManagerAlg().mapK(Kleisli.liftK[IO, Span[IO]]).pure[Resource[IO, *]]
+          }.handler
+          secrets <- Resource.eval(requestTemplate.ResourceProperties.secretIds.traverse(secretsManagerAlg().getSecretAs[UserConnectionInfo]))
+          implicit0(disp: Dispatcher[Resource[IO, *]]) <- Dispatcher[Resource[IO, *]].flattenK
+          implicit0(l: Logger[Resource[IO, *]]) <- Slf4jLogger.fromSlf4j[Resource[IO, *]](logger)
+          _ <- setupMainUserPermissions[Resource[IO, *]](requestTemplate.ResourceProperties, resetInitialPermissions)
+        } yield (requestCapture, requestTemplate.applyLens(requestTypeLens).set(_), handler, secrets)
 
-      r.use { case (requestCapture, requestTemplate, handler, secrets) =>
-        if (!containsInputError(secrets))
-          for {
-            _ <- handler(LambdaEnv.pure(requestTemplate(CloudFormationRequestType.CreateRequest), TestContext[IO]))
-            _ <- requestCapture.get.flatMap {
-              expectNSuccessfulResponses(1) |+| expectResponseContaining { resp =>
-                val name = databaseNameFromRequestTemplate.get(requestTemplate)
-                val respId = resp.PhysicalResourceId.map(_.value)
+      testResources
+        .use { case (requestCapture, requestTemplate, handler, secrets) =>
+          if (!containsInputError(secrets))
+            for {
+              _ <- handler(LambdaEnv.pure(requestTemplate(CloudFormationRequestType.CreateRequest), TestContext[IO]))
+              _ <- requestCapture.get.flatMap {
+                expectNSuccessfulResponses(1) |+| expectResponseContaining { resp =>
+                  val name = databaseNameFromRequestTemplate.get(requestTemplate)
+                  val respId = resp.PhysicalResourceId.map(_.value)
 
-                respId.contains(name.value)
+                  respId.contains(name.value)
+                }
               }
-            }
-            _ <- handler(LambdaEnv.pure(requestTemplate(CloudFormationRequestType.DeleteRequest), TestContext[IO]))
-            _ <- requestCapture.get.flatMap(expectNSuccessfulResponses(2))
-          } yield ()
-        else
-          for {
-            _ <- handler(LambdaEnv.pure(requestTemplate(CloudFormationRequestType.CreateRequest), TestContext[IO]))
-            _ <- requestCapture.get.flatMap {
-              expectDuplicateUsersError.map(_.whenA(containsDuplicateUsers(secrets))) |+|
-                expectReservedIdentifiersError.map(_.whenA(containsReservedIdentifiers(secrets)))
-            }
-          } yield ()
-      }
+              _ <- handler(LambdaEnv.pure(requestTemplate(CloudFormationRequestType.DeleteRequest), TestContext[IO]))
+              _ <- requestCapture.get.flatMap(expectNSuccessfulResponses(2))
+            } yield ()
+          else
+            for {
+              _ <- handler(LambdaEnv.pure(requestTemplate(CloudFormationRequestType.CreateRequest), TestContext[IO]))
+              _ <- requestCapture.get.flatMap {
+                expectDuplicateUsersError.map(_.whenA(containsDuplicateUsers(secrets))) |+|
+                  expectReservedIdentifiersError.map(_.whenA(containsReservedIdentifiers(secrets)))
+              }
+            } yield ()
+        }
     }
   }
 

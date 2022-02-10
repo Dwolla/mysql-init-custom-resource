@@ -25,6 +25,7 @@ class MySqlDatabaseInitHandlerImpl[F[_] : Temporal : Logger : TransactorFactory]
                                                                                  databaseRepository: DatabaseRepository[ConnectionIO],
                                                                                  roleRepository: RoleRepository[ConnectionIO],
                                                                                  userRepository: UserRepository[ConnectionIO],
+                                                                                 mainUserPermissions: MainUserPermissions[ConnectionIO],
                                                                                 ) extends CloudFormationCustomResource[F, DatabaseMetadata, INothing] {
   override def createResource(event: DatabaseMetadata): F[HandlerResponse[INothing]] =
     handleCreateOrUpdate(event)(createOrUpdate(_, event)).map(HandlerResponse(_, None))
@@ -43,6 +44,7 @@ class MySqlDatabaseInitHandlerImpl[F[_] : Temporal : Logger : TransactorFactory]
   private def createOrUpdate(userPasswords: List[UserConnectionInfo], input: DatabaseMetadata): ConnectionIO[PhysicalResourceId] =
     for {
       db <- databaseAsPhysicalResourceId[ConnectionIO](input.name)
+      _ <- mainUserPermissions.ensureMainUserHasGrantPermissions(input.username)
       _ <- databaseRepository.createDatabase(input)
       _ <- roleRepository.createRole(input.name)
       _ <- userPasswords.traverse { userPassword =>
@@ -168,6 +170,7 @@ object MySqlDatabaseInitHandlerImpl {
       DatabaseRepository[F],
       RoleRepository[F],
       UserRepository[F],
+      MainUserPermissions[F],
     )
 
   private[MySqlDatabaseInitHandlerImpl] def databaseAsPhysicalResourceId[F[_] : ApplicativeThrow](db: Database): F[PhysicalResourceId] =

@@ -59,6 +59,7 @@ lazy val `mysql-init-custom-resource` = (project in file("."))
         "mysql" % "mysql-connector-java" % "8.0.28" % Runtime,
         "com.ovoenergy" %% "natchez-extras-doobie" % "6.1.0",
         "com.github.cb372" %% "cats-retry" % catsRetryVersion,
+        "org.typelevel" %% "cats-parse" % "0.3.6",
         "org.scalameta" %% "munit" % munitVersion % Test,
         "org.scalameta" %% "munit-scalacheck" % munitVersion % Test,
         "io.circe" %% "circe-literal" % circeVersion % Test,
@@ -73,7 +74,9 @@ lazy val `mysql-init-custom-resource` = (project in file("."))
         "org.http4s" %% "http4s-dsl" % http4sVersion % Test,
         "com.eed3si9n.expecty" %% "expecty" % "0.15.4" % Test,
         "software.amazon.awssdk" % "sts" % awsSdkVersion % Test,
-        "eu.timepit" %% "refined-scalacheck" % refinedV % Test
+        "eu.timepit" %% "refined-scalacheck" % refinedV % Test,
+        "org.typelevel" %% "cats-laws" % "2.7.0" % Test,
+        "org.typelevel" %% "discipline-munit" % "1.0.9" % Test,
       )
     },
     addBuildInfoToConfig(Test),
