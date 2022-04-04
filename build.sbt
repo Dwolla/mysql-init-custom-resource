@@ -33,7 +33,7 @@ lazy val `mysql-init-custom-resource` = (project in file("."))
       val log4catsVersion = "2.2.0"
       val monocleVersion = "2.1.0"
       val http4sVersion = "0.23.10"
-      val awsSdkVersion = "2.17.138"
+      val awsSdkVersion = "2.17.162"
       val refinedV = "0.9.28"
       val catsRetryVersion = "3.1.0"
 
@@ -51,7 +51,7 @@ lazy val `mysql-init-custom-resource` = (project in file("."))
         "org.typelevel" %% "log4cats-slf4j" % log4catsVersion,
         "com.amazonaws" % "aws-lambda-java-log4j2" % "1.5.1" % Runtime,
         "org.apache.logging.log4j" % "log4j-slf4j-impl" % "2.17.1" % Runtime,
-        "com.chuusai" %% "shapeless" % "2.3.8",
+        "com.chuusai" %% "shapeless" % "2.3.9",
         "com.dwolla" %% "fs2-aws-java-sdk2" % "3.0.0-RC1",
         "software.amazon.awssdk" % "secretsmanager" % awsSdkVersion,
         "org.tpolecat" %% "doobie-core" % doobieVersion,
@@ -59,7 +59,7 @@ lazy val `mysql-init-custom-resource` = (project in file("."))
         "mysql" % "mysql-connector-java" % "8.0.28" % Runtime,
         "com.ovoenergy" %% "natchez-extras-doobie" % "6.1.0",
         "com.github.cb372" %% "cats-retry" % catsRetryVersion,
-        "org.typelevel" %% "cats-parse" % "0.3.6",
+        "org.typelevel" %% "cats-parse" % "0.3.7",
         "org.scalameta" %% "munit" % munitVersion % Test,
         "org.scalameta" %% "munit-scalacheck" % munitVersion % Test,
         "io.circe" %% "circe-literal" % circeVersion % Test,
