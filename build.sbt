@@ -56,7 +56,7 @@ lazy val `mysql-init-custom-resource` = (project in file("."))
         "software.amazon.awssdk" % "secretsmanager" % awsSdkVersion,
         "org.tpolecat" %% "doobie-core" % doobieVersion,
         "org.tpolecat" %% "doobie-refined" % doobieVersion,
-        "mysql" % "mysql-connector-java" % "8.0.28" % Runtime,
+        "mysql" % "mysql-connector-java" % "8.0.29" % Runtime,
         "com.ovoenergy" %% "natchez-extras-doobie" % "6.1.0",
         "com.github.cb372" %% "cats-retry" % catsRetryVersion,
         "org.typelevel" %% "cats-parse" % "0.3.7",
