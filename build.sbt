@@ -33,7 +33,7 @@ lazy val `mysql-init-custom-resource` = (project in file("."))
       val log4catsVersion = "2.2.0"
       val monocleVersion = "2.1.0"
       val http4sVersion = "0.23.11"
-      val awsSdkVersion = "2.17.163"
+      val awsSdkVersion = "2.17.179"
       val refinedV = "0.9.28"
       val catsRetryVersion = "3.1.0"
 
@@ -56,7 +56,7 @@ lazy val `mysql-init-custom-resource` = (project in file("."))
         "software.amazon.awssdk" % "secretsmanager" % awsSdkVersion,
         "org.tpolecat" %% "doobie-core" % doobieVersion,
         "org.tpolecat" %% "doobie-refined" % doobieVersion,
-        "mysql" % "mysql-connector-java" % "8.0.28" % Runtime,
+        "mysql" % "mysql-connector-java" % "8.0.29" % Runtime,
         "com.ovoenergy" %% "natchez-extras-doobie" % "6.1.0",
         "com.github.cb372" %% "cats-retry" % catsRetryVersion,
         "org.typelevel" %% "cats-parse" % "0.3.7",
