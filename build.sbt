@@ -29,11 +29,11 @@ lazy val `mysql-init-custom-resource` = (project in file("."))
       val doobieVersion = "1.0.0-RC2"
       val munitVersion = "0.7.29"
       val circeVersion = "0.14.1"
-      val scalacheckEffectVersion = "1.0.3"
+      val scalacheckEffectVersion = "1.0.4"
       val log4catsVersion = "2.2.0"
       val monocleVersion = "2.1.0"
       val http4sVersion = "0.23.11"
-      val awsSdkVersion = "2.17.179"
+      val awsSdkVersion = "2.17.190"
       val refinedV = "0.9.29"
       val catsRetryVersion = "3.1.0"
 

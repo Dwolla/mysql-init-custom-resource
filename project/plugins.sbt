@@ -5,5 +5,5 @@ addSbtPlugin("com.eed3si9n" % "sbt-buildinfo" % "0.11.0")
 libraryDependencies ++= Seq(
   "com.comcast" %% "ip4s-core" % "3.1.3",
   "org.typelevel" %% "cats-effect" % "3.3.11",
-  "org.typelevel" %% "log4cats-core" % "2.2.0",
+  "org.typelevel" %% "log4cats-core" % "2.3.1",
 )
