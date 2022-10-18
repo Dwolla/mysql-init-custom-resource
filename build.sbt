@@ -33,7 +33,7 @@ lazy val `mysql-init-custom-resource` = (project in file("."))
       val log4catsVersion = "2.3.1"
       val monocleVersion = "2.1.0"
       val http4sVersion = "0.23.12"
-      val awsSdkVersion = "2.17.190"
+      val awsSdkVersion = "2.17.293"
       val refinedV = "0.9.29"
       val catsRetryVersion = "3.1.0"
 
