@@ -42,7 +42,7 @@ lazy val `mysql-init-custom-resource` = (project in file("."))
         "org.tpolecat" %% "natchez-noop" % natchezVersion,
         "org.tpolecat" %% "natchez-xray" % natchezVersion,
         "org.tpolecat" %% "natchez-http4s" % "0.3.2",
-        "org.typelevel" %% "cats-tagless-macros" % "0.14.0",
+        "org.typelevel" %% "cats-tagless-macros" % "0.15.0",
         "org.http4s" %% "http4s-ember-client" % http4sVersion,
         "io.circe" %% "circe-parser" % circeVersion,
         "io.circe" %% "circe-generic" % circeVersion,
