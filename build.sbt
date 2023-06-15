@@ -31,7 +31,7 @@ lazy val `mysql-init-custom-resource` = (project in file("."))
       val circeVersion = "0.14.2"
       val scalacheckEffectVersion = "1.0.4"
       val log4catsVersion = "2.3.1"
-      val monocleVersion = "2.1.0"
+      val monocleVersion = "3.2.0"
       val http4sVersion = "0.23.12"
       val awsSdkVersion = "2.17.190"
       val refinedV = "0.9.29"
@@ -69,8 +69,8 @@ lazy val `mysql-init-custom-resource` = (project in file("."))
         "org.typelevel" %% "log4cats-noop" % log4catsVersion % Test,
         "io.circe" %% "circe-testing" % circeVersion % Test,
         "io.circe" %% "circe-optics" % "0.14.1" % Test,
-        "com.github.julien-truffaut" %% "monocle-core" % monocleVersion % Test,
-        "com.github.julien-truffaut" %% "monocle-macro" % monocleVersion % Test,
+        "dev.optics" %% "monocle-core" % monocleVersion % Test,
+        "dev.optics" %% "monocle-macro" % monocleVersion % Test,
         "org.http4s" %% "http4s-dsl" % http4sVersion % Test,
         "com.eed3si9n.expecty" %% "expecty" % "0.15.4" % Test,
         "software.amazon.awssdk" % "sts" % awsSdkVersion % Test,
