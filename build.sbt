@@ -68,7 +68,7 @@ lazy val `mysql-init-custom-resource` = (project in file("."))
         "org.typelevel" %% "scalacheck-effect-munit" % scalacheckEffectVersion % Test,
         "org.typelevel" %% "log4cats-noop" % log4catsVersion % Test,
         "io.circe" %% "circe-testing" % circeVersion % Test,
-        "io.circe" %% "circe-optics" % "0.14.1" % Test,
+        "io.circe" %% "circe-optics" % "0.15.0" % Test,
         "com.github.julien-truffaut" %% "monocle-core" % monocleVersion % Test,
         "com.github.julien-truffaut" %% "monocle-macro" % monocleVersion % Test,
         "org.http4s" %% "http4s-dsl" % http4sVersion % Test,
