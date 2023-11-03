@@ -49,7 +49,7 @@ lazy val `mysql-init-custom-resource` = (project in file("."))
         "io.circe" %% "circe-refined" % circeVersion,
         "io.estatico" %% "newtype" % "0.4.4",
         "org.typelevel" %% "log4cats-slf4j" % log4catsVersion,
-        "com.amazonaws" % "aws-lambda-java-log4j2" % "1.5.1" % Runtime,
+        "com.amazonaws" % "aws-lambda-java-log4j2" % "1.6.0" % Runtime,
         "org.apache.logging.log4j" % "log4j-slf4j-impl" % "2.17.2" % Runtime,
         "com.chuusai" %% "shapeless" % "2.3.9",
         "com.dwolla" %% "fs2-aws-java-sdk2" % "3.0.0-RC1",
