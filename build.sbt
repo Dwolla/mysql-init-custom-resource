@@ -2,7 +2,7 @@ ThisBuild / organization := "com.dwolla"
 ThisBuild / description := "CloudFormation custom resource to initialize a MySQL database with a new user"
 ThisBuild / homepage := Some(url("https://github.com/Dwolla/mysql-init-custom-resource"))
 ThisBuild / licenses += ("MIT", url("https://opensource.org/licenses/MIT"))
-ThisBuild / scalaVersion := "2.13.8"
+ThisBuild / scalaVersion := "2.13.13"
 ThisBuild / scalacOptions += "-Ymacro-annotations"
 ThisBuild / developers := List(
   Developer(
