@@ -35,7 +35,7 @@ lazy val `mysql-init-custom-resource` = (project in file("."))
       val http4sVersion = "0.23.12"
       val awsSdkVersion = "2.17.190"
       val refinedV = "0.9.29"
-      val catsRetryVersion = "3.1.0"
+      val catsRetryVersion = "3.1.3"
 
       Seq(
         "org.typelevel" %% "feral-lambda-cloudformation-custom-resource" % feralVersion,
