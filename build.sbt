@@ -76,7 +76,7 @@ lazy val `mysql-init-custom-resource` = (project in file("."))
         "software.amazon.awssdk" % "sts" % awsSdkVersion % Test,
         "eu.timepit" %% "refined-scalacheck" % refinedV % Test,
         "org.typelevel" %% "cats-laws" % "2.7.0" % Test,
-        "org.typelevel" %% "discipline-munit" % "1.0.9" % Test,
+        "org.typelevel" %% "discipline-munit" % "2.0.0" % Test,
       )
     },
     addBuildInfoToConfig(Test),
