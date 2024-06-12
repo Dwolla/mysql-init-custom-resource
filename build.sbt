@@ -72,7 +72,7 @@ lazy val `mysql-init-custom-resource` = (project in file("."))
         "com.github.julien-truffaut" %% "monocle-core" % monocleVersion % Test,
         "com.github.julien-truffaut" %% "monocle-macro" % monocleVersion % Test,
         "org.http4s" %% "http4s-dsl" % http4sVersion % Test,
-        "com.eed3si9n.expecty" %% "expecty" % "0.15.4" % Test,
+        "com.eed3si9n.expecty" %% "expecty" % "0.16.0" % Test,
         "software.amazon.awssdk" % "sts" % awsSdkVersion % Test,
         "eu.timepit" %% "refined-scalacheck" % refinedV % Test,
         "org.typelevel" %% "cats-laws" % "2.7.0" % Test,
