@@ -1,8 +1,13 @@
 queue_rules:
   - name: default
-    conditions:
+    queue_conditions:
+      - author=dwolla-oss-scala-steward[bot]
       - status-success=Build and Test (ubuntu-latest, 2.13.8, temurin@11, mysql:8)
       - status-success=Build and Test (ubuntu-latest, 2.13.8, temurin@8, mysql:8)
+    merge_conditions:
+      - status-success=Build and Test (ubuntu-latest, 2.13.8, temurin@11, mysql:8)
+      - status-success=Build and Test (ubuntu-latest, 2.13.8, temurin@8, mysql:8)
+    merge_method: squash
 
 pull_request_rules:
   - name: assign and label scala-steward's PRs
@@ -18,12 +23,7 @@ pull_request_rules:
       - -draft # filter-out GH draft PRs
     actions:
       update:
-  - name: merge scala-steward's PRs
-    conditions:
-      - author=dwolla-oss-scala-steward[bot]
-      - status-success=Build and Test (ubuntu-latest, 2.13.8, temurin@11, mysql:8)
-      - status-success=Build and Test (ubuntu-latest, 2.13.8, temurin@8, mysql:8)
+  - name: refactored queue action rule
+    conditions: []
     actions:
       queue:
-        method: squash
-        name: default
