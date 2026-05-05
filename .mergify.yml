@@ -1,6 +1,6 @@
 queue_rules:
   - name: default
-    conditions:
+    merge_conditions:
       - status-success=Build and Test (ubuntu-latest, 2.13.8, temurin@11, mysql:8)
       - status-success=Build and Test (ubuntu-latest, 2.13.8, temurin@8, mysql:8)
 
