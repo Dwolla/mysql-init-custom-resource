@@ -1,6 +1,6 @@
-version: 1.0
+version: 2.0
 service:
-  id: urn:service:mysql-init-custom-resource
+  id: urn:dwolla:service:mysql-init-custom-resource
   type: service
   name: mysql-init-custom-resource
   domain: platform
@@ -23,12 +23,12 @@ interfaces:
     publishes: []
     consumes: []
 external_dependencies:
-  - id: urn:infrastructure:secrets-manager:aws-secrets-manager
+  - id: urn:dwolla:infrastructure:secrets-manager:aws-secrets-manager
     type: secrets-manager
     engine: AWS Secrets Manager
     access_pattern: read-only
     reason: Reads the user connection secrets passed to the custom resource.
-  - id: urn:infrastructure:database:mysql
+  - id: urn:dwolla:infrastructure:database:mysql
     type: database
     engine: MySQL
     access_pattern: read-write
