@@ -11,7 +11,7 @@ stages:
       - |
         . ${NVM_DIR}/nvm.sh --no-use
         nvm install
-        npm install -g npm && npm install -g serverless
+        npm install -g npm@9 && npm install -g serverless@3.40.0
         sbt "deploy Admin"
   deployDevInt:
     nodeLabel: nvm-sbt-deployer
@@ -19,7 +19,7 @@ stages:
       - |
         . ${NVM_DIR}/nvm.sh --no-use
         nvm install
-        npm install -g npm && npm install -g serverless
+        npm install -g npm@9 && npm install -g serverless@3.40.0
         sbt "deploy DevInt"
   deployUat:
     nodeLabel: nvm-sbt-deployer
@@ -27,7 +27,7 @@ stages:
       - |
         . ${NVM_DIR}/nvm.sh --no-use
         nvm install
-        npm install -g npm && npm install -g serverless
+        npm install -g npm@9 && npm install -g serverless@3.40.0
         sbt "deploy Uat"
   deployProd:
     nodeLabel: nvm-sbt-deployer
@@ -35,5 +35,5 @@ stages:
       - |
         . ${NVM_DIR}/nvm.sh --no-use
         nvm install
-        npm install -g npm && npm install -g serverless
+        npm install -g npm@9 && npm install -g serverless@3.40.0
         sbt "deploy Prod"
