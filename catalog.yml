@@ -1,0 +1,44 @@
+version: 2.0
+service:
+  id: urn:dwolla:service:mysql-init-custom-resource
+  type: service
+  name: mysql-init-custom-resource
+  domain: platform
+  description: >
+    CloudFormation custom resource Lambdas that initialize MySQL RDS instances with
+    databases and users, using connection secrets stored in AWS Secrets Manager.
+  language: Scala
+  framework: feral (AWS Lambda), Serverless Framework
+  tags: [cloudformation-custom-resource, aws-lambda, rds, mysql, secrets-manager]
+ownership:
+  team: dwolla-engineering/platform
+  repo:
+    url: https://github.com/Dwolla/mysql-init-custom-resource
+    default_branch: main
+interfaces:
+  sync:
+    provides: []
+    consumes: []
+  events:
+    publishes: []
+    consumes: []
+external_dependencies:
+  - id: urn:dwolla:infrastructure:secrets-manager:aws-secrets-manager
+    type: secrets-manager
+    engine: AWS Secrets Manager
+    access_pattern: read-only
+    reason: Reads the user connection secrets passed to the custom resource.
+  - id: urn:dwolla:infrastructure:database:mysql
+    type: database
+    engine: MySQL
+    access_pattern: read-write
+    reason: Connects as the master user to create databases, roles and users.
+operations:
+  cloudformation:
+    exports:
+      - "mysql-init-custom-resource:<stage>:InitMySqlDatabaseArn"
+      - "mysql-init-custom-resource:<stage>:InitMySqlDatabaseSgId"
+ai_notes: >
+  Invoked by CloudFormation as a custom resource, not called directly. RDS stacks import the
+  InitMySqlDatabaseArn export as the custom resource's ServiceToken and the
+  InitMySqlDatabaseSgId export to allow the Lambda's security group into the instance.
