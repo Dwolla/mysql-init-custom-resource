@@ -13,7 +13,7 @@ import natchez._
 import natchez.http4s.NatchezMiddleware
 import natchez.noop.NoopSpan
 import natchez.xray.{XRay, XRayEnvironment}
-import org.http4s.client.{Client, middleware}
+import org.http4s.client.Client
 import org.http4s.ember.client.EmberClientBuilder
 import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
@@ -55,9 +55,17 @@ class MySqlDatabaseInitHandlerF[F[_] : Async](implicit logHandler: LogHandler = 
     EmberClientBuilder
       .default[F]
       .build
-      .map(middleware.Logger[F](logHeaders = true, logBody = true))
 
   private def tracedHttpClient(client: Client[F], span: Span[F]): Client[Kleisli[F, Span[F], *]] =
-    NatchezMiddleware.client(client.translate(Kleisli.liftK[F, Span[F]])(Kleisli.applyK(span)))
+    MySqlDatabaseInitHandlerF.decorate(client, span)
 
+}
+
+object MySqlDatabaseInitHandlerF {
+  /**
+   * The middleware the Lambda's HTTP client runs through, kept apart from building the client
+   * so tests can apply it to an in-memory client.
+   */
+  private[init] def decorate[F[_] : MonadCancelThrow](client: Client[F], span: Span[F]): Client[Kleisli[F, Span[F], *]] =
+    NatchezMiddleware.client(client.translate(Kleisli.liftK[F, Span[F]])(Kleisli.applyK(span)))
 }
