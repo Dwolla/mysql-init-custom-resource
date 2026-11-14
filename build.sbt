@@ -50,7 +50,7 @@ lazy val `mysql-init-custom-resource` = (project in file("."))
         "io.estatico" %% "newtype" % "0.4.4",
         "org.typelevel" %% "log4cats-slf4j" % log4catsVersion,
         "com.amazonaws" % "aws-lambda-java-log4j2" % "1.5.1" % Runtime,
-        "org.apache.logging.log4j" % "log4j-slf4j-impl" % "2.17.2" % Runtime,
+        "org.apache.logging.log4j" % "log4j-slf4j-impl" % "2.19.0" % Runtime,
         "com.chuusai" %% "shapeless" % "2.3.9",
         "com.dwolla" %% "fs2-aws-java-sdk2" % "3.0.0-RC1",
         "software.amazon.awssdk" % "secretsmanager" % awsSdkVersion,
