@@ -75,7 +75,7 @@ lazy val `mysql-init-custom-resource` = (project in file("."))
         "com.eed3si9n.expecty" %% "expecty" % "0.15.4" % Test,
         "software.amazon.awssdk" % "sts" % awsSdkVersion % Test,
         "eu.timepit" %% "refined-scalacheck" % refinedV % Test,
-        "org.typelevel" %% "cats-laws" % "2.7.0" % Test,
+        "org.typelevel" %% "cats-laws" % "2.9.0" % Test,
         "org.typelevel" %% "discipline-munit" % "1.0.9" % Test,
       )
     },
