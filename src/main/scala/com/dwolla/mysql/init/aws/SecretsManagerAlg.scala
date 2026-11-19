@@ -1,6 +1,7 @@
 package com.dwolla.mysql.init
 package aws
 
+import cats.MonadThrow
 import cats.syntax.all._
 import cats.effect.{Trace => _, _}
 import cats.tagless.Derive
@@ -12,10 +13,12 @@ import eu.timepit.refined.api.Refined
 import eu.timepit.refined.predicates.all._
 import eu.timepit.refined.auto._
 import io.circe.syntax._
-import io.circe.{Decoder, Encoder, parser}
+import io.circe.{CursorOp, Decoder, DecodingFailure, Encoder, parser}
 import org.typelevel.log4cats.Logger
 import software.amazon.awssdk.services.secretsmanager.SecretsManagerAsyncClient
 import software.amazon.awssdk.services.secretsmanager.model._
+
+import scala.util.control.NoStackTrace
 
 trait SecretsManagerAlg[F[_]] {
   def getSecret(secretId: SecretId): F[String]
@@ -45,11 +48,7 @@ object SecretsManagerAlg {
         AwsEval.eval[F](GetSecretValueRequest.builder().secretId(secretId.value).build())(client.getSecretValue)(_.secretString())
 
     override def getSecretAs[A: Decoder](secretId: SecretId): F[A] =
-      for {
-        secretString <- getSecret(secretId)
-        secretJson <- parser.parse(secretString).liftTo[F]
-        a <- secretJson.as[A].liftTo[F]
-      } yield a
+      getSecret(secretId).flatMap(decodeSecret[F, A](secretId))
 
     override def createSecret(name: SecretName, secret: String): F[SecretId] =
       AwsEval.eval[F](CreateSecretRequest.builder().name(name.value).secretString(secret).build())(client.createSecret)(_.arn())
@@ -58,9 +57,28 @@ object SecretsManagerAlg {
     override def deleteSecret(id: SecretId, deletionTimeFrame: SecretDeletionRecoveryTime): F[Unit] =
       AwsEval.eval[F](DeleteSecretRequest.builder().secretId(id.value).withCoolDownPeriod(deletionTimeFrame).build())(client.deleteSecret)(_ => ())
   }
+
+  /**
+   * Decoding errors quote the input they failed on, so a failure is reported by the secret's
+   * id and the path that failed, never by the decoder's own message.
+   */
+  private[init] def decodeSecret[F[_] : MonadThrow, A : Decoder](secretId: SecretId)
+                                                                (secretString: String): F[A] =
+    parser.decode[A](secretString)
+      .leftMap {
+        case failure: DecodingFailure =>
+          UndecodableSecretException(secretId, s"the value at ${CursorOp.opsToPath(failure.history)} is missing or invalid")
+        case _ =>
+          UndecodableSecretException(secretId, "the secret is not valid JSON")
+      }
+      .liftTo[F]
 }
 
 case class ResourceNotFoundException(resource: String, cause: Option[Throwable]) extends RuntimeException(resource, cause.orNull)
+
+case class UndecodableSecretException(secretId: SecretId, problem: String)
+  extends RuntimeException(s"Could not decode secret ${secretId.value}: $problem")
+    with NoStackTrace
 
 sealed trait SecretDeletionRecoveryTime
 
