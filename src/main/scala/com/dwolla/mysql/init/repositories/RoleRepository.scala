@@ -89,17 +89,19 @@ object RoleRepository {
           .flatTap { completion =>
             Logger[ConnectionIO].info(s"added $username to role $role with status $completion")
           }
-          .void >> activateDefaultRole(username, role)
+          .void >> activateDefaultRoles(username)
       }
 
-    // Granting a role does not activate it (MySQL requires `activate_all_roles_on_login` or
-    // `SET DEFAULT ROLE` for the privileges to take effect at login). Without this, newly
-    // granted users can authenticate but get "Access denied ... to database" errors on every query.
-    private def activateDefaultRole(username: Username, role: RoleName): ConnectionIO[Unit] =
-      RoleQueries.setDefaultRole(username, role)
+    // Granting a role does not activate it: MySQL 8 needs `SET DEFAULT ROLE` (or the server-wide
+    // `activate_all_roles_on_login`) for the role's privileges to apply at login. Without it, a new
+    // user authenticates but gets "Access denied ... to database" (1044) on every connection.
+    // `ALL` rather than this database's role, because `SET DEFAULT ROLE` replaces the user's whole
+    // default-role list, and a user granted roles by more than one database must keep all of them.
+    private def activateDefaultRoles(username: Username): ConnectionIO[Unit] =
+      RoleQueries.setAllRolesAsDefault(username)
         .run
         .flatTap { completion =>
-          Logger[ConnectionIO].info(s"activated $role as default role for $username with status $completion")
+          Logger[ConnectionIO].info(s"activated all granted roles by default for $username with status $completion")
         }
         .void
 
@@ -129,10 +131,9 @@ object RoleQueries {
     (fr"REVOKE" ++ Fragment.const(role.value) ++ fr"FROM" ++ Fragment.const(userName.value))
       .update
 
-  def setDefaultRole(userName: Username,
-                     role: RoleName)
-                    (implicit logHandler: LogHandler): Update0 =
-    (fr"SET DEFAULT ROLE" ++ Fragment.const(role.value) ++ fr"TO" ++ Fragment.const(userName.value))
+  def setAllRolesAsDefault(userName: Username)
+                          (implicit logHandler: LogHandler): Update0 =
+    (fr"SET DEFAULT ROLE ALL TO" ++ Fragment.const(userName.value))
       .update
 
   // Pretty sure roles and users are stored in the same table

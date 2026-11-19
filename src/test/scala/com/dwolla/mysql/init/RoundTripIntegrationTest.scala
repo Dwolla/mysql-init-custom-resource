@@ -177,6 +177,7 @@ class RoundTripIntegrationTest
                   respId.contains(name.value)
                 }
               }
+              _ <- secrets.traverse_(expectUserCanUseItsDatabase)
               _ <- handler(LambdaEnv.pure(requestTemplate(CloudFormationRequestType.DeleteRequest), TestContext[IO]))
               _ <- requestCapture.get.flatMap(expectNSuccessfulResponses(2))
             } yield ()
@@ -191,6 +192,24 @@ class RoundTripIntegrationTest
         }
     }
   }
+
+  /**
+   * Logs in as a user the handler just created, connecting to that user's database, and checks the
+   * user can see its own schema. Creating the user and granting its database role isn't enough on
+   * its own: unless the role is activated (`SET DEFAULT ROLE`), MySQL rejects the connection with
+   * error 1044, "Access denied for user ... to database ...".
+   */
+  private def expectUserCanUseItsDatabase(user: UserConnectionInfo): IO[Unit] =
+    sql"SELECT COUNT(*) FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = ${user.database.value}"
+      .query[Long]
+      .unique
+      .transact(Transactor.fromDriverManager[IO](
+        "com.mysql.cj.jdbc.Driver",
+        s"jdbc:mysql://${user.host}:${user.port}/${user.database.value}",
+        user.user.value,
+        user.password.value
+      ))
+      .map(count => assertEquals(count, 1L, s"${user.user} could not see its database ${user.database}"))
 
   private def containsInputError(secrets: List[UserConnectionInfo]): Boolean =
     List(
